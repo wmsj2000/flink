@@ -204,7 +204,7 @@ object FlinkStreamProgram {
         .build()
     )
 
-    // join reorder
+    /*    // join reorder
     if (tableConfig.get(OptimizerConfigOptions.TABLE_OPTIMIZER_JOIN_REORDER_ENABLED)) {
       chainedProgram.addLast(
         JOIN_REORDER,
@@ -228,7 +228,7 @@ object FlinkStreamProgram {
           )
           .build()
       )
-    }
+    }*/
 
     // project rewrite
     chainedProgram.addLast(

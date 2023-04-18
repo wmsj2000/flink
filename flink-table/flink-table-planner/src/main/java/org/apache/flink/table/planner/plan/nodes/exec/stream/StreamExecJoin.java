@@ -80,6 +80,14 @@ public class StreamExecJoin extends ExecNodeBase<RowData>
     @JsonProperty(FIELD_NAME_JOIN_SPEC)
     private final JoinSpec joinSpec;
 
+    public List<int[]> getLeftUpsertKeys() {
+        return leftUpsertKeys;
+    }
+
+    public List<int[]> getRightUpsertKeys() {
+        return rightUpsertKeys;
+    }
+
     @JsonProperty(FIELD_NAME_LEFT_UPSERT_KEYS)
     @JsonInclude(JsonInclude.Include.NON_DEFAULT)
     private final List<int[]> leftUpsertKeys;
@@ -125,6 +133,10 @@ public class StreamExecJoin extends ExecNodeBase<RowData>
         this.joinSpec = checkNotNull(joinSpec);
         this.leftUpsertKeys = leftUpsertKeys;
         this.rightUpsertKeys = rightUpsertKeys;
+    }
+
+    public JoinSpec getJoinSpec() {
+        return joinSpec;
     }
 
     @Override

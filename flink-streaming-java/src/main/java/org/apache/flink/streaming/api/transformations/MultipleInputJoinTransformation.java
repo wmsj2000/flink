@@ -21,54 +21,36 @@ package org.apache.flink.streaming.api.transformations;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.dag.Transformation;
-import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
 
-import java.util.ArrayList;
-import java.util.List;
-
-/** {@link AbstractMultipleInputTransformation} implementation for keyed streams. */
+/**
+ * {@link AbstractMultipleInputTransformation} implementation for keyed streams.
+ *
+ * @author Quentin Qiu
+ */
 @Internal
-public class KeyedMultipleInputTransformation<OUT>
-        extends AbstractMultipleInputTransformation<OUT> {
-    private final List<KeySelector<?, ?>> stateKeySelectors = new ArrayList<>();
-    protected final TypeInformation<?> stateKeyType;
-
-    public KeyedMultipleInputTransformation(
+public class MultipleInputJoinTransformation<OUT> extends KeyedMultipleInputTransformation<OUT> {
+    public MultipleInputJoinTransformation(
             String name,
             StreamOperatorFactory<OUT> operatorFactory,
             TypeInformation<OUT> outputType,
             int parallelism,
             TypeInformation<?> stateKeyType) {
-        super(name, operatorFactory, outputType, parallelism);
-        this.stateKeyType = stateKeyType;
-        updateManagedMemoryStateBackendUseCase(true);
+        super(name, operatorFactory, outputType, parallelism, stateKeyType);
     }
 
-    public KeyedMultipleInputTransformation(
+    public MultipleInputJoinTransformation(
             String name,
             StreamOperatorFactory<OUT> operatorFactory,
             TypeInformation<OUT> outputType,
             int parallelism,
             boolean parallelismConfigured,
             TypeInformation<?> stateKeyType) {
-        super(name, operatorFactory, outputType, parallelism, parallelismConfigured);
-        this.stateKeyType = stateKeyType;
-        updateManagedMemoryStateBackendUseCase(true);
+        super(name, operatorFactory, outputType, parallelism, parallelismConfigured, stateKeyType);
     }
 
-    public KeyedMultipleInputTransformation<OUT> addInput(
-            Transformation<?> input, KeySelector<?, ?> keySelector) {
+    public MultipleInputJoinTransformation<OUT> addInput(Transformation<?> input) {
         inputs.add(input);
-        getStateKeySelectors().add(keySelector);
         return this;
-    }
-
-    public TypeInformation<?> getStateKeyType() {
-        return stateKeyType;
-    }
-
-    public List<KeySelector<?, ?>> getStateKeySelectors() {
-        return stateKeySelectors;
     }
 }

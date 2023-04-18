@@ -223,7 +223,8 @@ public class InputProperty {
      * appears on exactly one parallelism.
      */
     public static class HashDistribution extends RequiredDistribution {
-        private final int[] keys;
+        /*private  final int[] keys;*/
+        private int[] keys;
 
         private HashDistribution(int[] keys) {
             super(DistributionType.HASH);
@@ -233,6 +234,10 @@ public class InputProperty {
 
         public int[] getKeys() {
             return keys;
+        }
+
+        public void setKeys(int[] keys) {
+            this.keys = keys;
         }
 
         @Override

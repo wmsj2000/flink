@@ -24,6 +24,7 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectRea
 import org.apache.flink.streaming.api.graph.StreamGraph
 import org.apache.flink.table.api.{ExplainDetail, ExplainFormat, PlanReference, TableConfig, TableException}
 import org.apache.flink.table.api.PlanReference.{ContentPlanReference, FilePlanReference, ResourcePlanReference}
+import org.apache.flink.table.api.config.OptimizerConfigOptions
 import org.apache.flink.table.catalog.{CatalogManager, FunctionCatalog}
 import org.apache.flink.table.delegation.{Executor, InternalPlan}
 import org.apache.flink.table.module.ModuleManager
@@ -31,7 +32,7 @@ import org.apache.flink.table.operations.{ModifyOperation, Operation}
 import org.apache.flink.table.planner.plan.`trait`._
 import org.apache.flink.table.planner.plan.ExecNodeGraphInternalPlan
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeGraph
-import org.apache.flink.table.planner.plan.nodes.exec.processor.ExecNodeGraphProcessor
+import org.apache.flink.table.planner.plan.nodes.exec.processor.{ExecNodeGraphProcessor, MultipleInputStreamJoinNodeCreationProcessor}
 import org.apache.flink.table.planner.plan.nodes.exec.serde.JsonSerdeUtil
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecNode
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodePlanDumper
@@ -76,7 +77,21 @@ class StreamPlanner(
 
   override protected def getOptimizer: Optimizer = new StreamCommonSubGraphBasedOptimizer(this)
 
+  /*
   override protected def getExecNodeGraphProcessors: Seq[ExecNodeGraphProcessor] = Seq()
+   */
+  override protected def getExecNodeGraphProcessors: Seq[ExecNodeGraphProcessor] = {
+    val processors = new util.ArrayList[ExecNodeGraphProcessor]()
+
+    // multiple input join creation, OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED default true.
+    if (getTableConfig.get(OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED)) {
+      /*
+    processors.add(new StreamMultipleInputJoinNodeCreationProcessor(true))
+       */
+      processors.add(new MultipleInputStreamJoinNodeCreationProcessor())
+    }
+    processors
+  }
 
   override protected def translateToPlan(execGraph: ExecNodeGraph): util.List[Transformation[_]] = {
     beforeTranslation()

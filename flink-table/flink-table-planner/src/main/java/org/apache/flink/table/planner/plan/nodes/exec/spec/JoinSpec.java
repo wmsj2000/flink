@@ -53,16 +53,26 @@ public class JoinSpec {
 
     /** 0-based index of join keys in left side. */
     @JsonProperty(FIELD_NAME_LEFT_KEYS)
-    private final int[] leftKeys;
+    /*
+        private final int[] leftKeys;
+    */
+    private int[] leftKeys;
 
     /** 0-based index of join keys in right side. */
     @JsonProperty(FIELD_NAME_RIGHT_KEYS)
-    private final int[] rightKeys;
+    /*
+        private final int[] rightKeys;
+    */
+    private int[] rightKeys;
+
+    public void setFilterNulls(boolean[] filterNulls) {
+        this.filterNulls = filterNulls;
+    }
 
     /** whether to filter null values or not for each corresponding index join key. */
     @JsonProperty(FIELD_NAME_FILTER_NULLS)
-    private final boolean[] filterNulls;
-
+    /*    private final boolean[] filterNulls;*/
+    private boolean[] filterNulls;
     /** Non Equi join conditions. */
     @JsonProperty(FIELD_NAME_NON_EQUI_CONDITION)
     private final @Nullable RexNode nonEquiCondition;
@@ -101,6 +111,14 @@ public class JoinSpec {
     @JsonIgnore
     public int[] getRightKeys() {
         return rightKeys;
+    }
+
+    public void setLeftKeys(int[] leftKeys) {
+        this.leftKeys = leftKeys;
+    }
+
+    public void setRightKeys(int[] rightKeys) {
+        this.rightKeys = rightKeys;
     }
 
     @JsonIgnore

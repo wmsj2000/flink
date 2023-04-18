@@ -55,6 +55,7 @@ import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecLookupJoi
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecMatch;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecMiniBatchAssigner;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecMultipleInput;
+import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecMultipleInputJoin;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecNode;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecOverAggregate;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecPythonCalc;
@@ -166,6 +167,7 @@ public final class ExecNodeMetadataUtil {
                     add(StreamExecPythonGroupTableAggregate.class);
                     add(StreamExecSort.class);
                     add(StreamExecMultipleInput.class);
+                    add(StreamExecMultipleInputJoin.class);
                 }
             };
 
