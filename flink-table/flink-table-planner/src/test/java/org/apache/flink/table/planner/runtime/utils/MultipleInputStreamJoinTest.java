@@ -35,10 +35,12 @@ import org.apache.flink.table.planner.utils.JavaScalaConversionUtil;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.TestLogger;
 
-import org.junit.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,7 +49,7 @@ import scala.Tuple2;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** MultipleInputStreamJoinTest */
-public abstract class MultipleInputStreamJoinTest extends TestLogger {
+public class MultipleInputStreamJoinTest extends TestLogger {
 
     private static final int DEFAULT_PARALLELISM = 4;
 
@@ -86,10 +88,9 @@ public abstract class MultipleInputStreamJoinTest extends TestLogger {
     public void before() throws Exception {
         tEnv = getTableEnvironment();
         catalog = tEnv.getCatalog(tEnv.getCurrentCatalog()).get();
-
         tEnv.getConfig()
                 .getConfiguration()
-                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_JOIN_REORDER_ENABLED, true);
+                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_JOIN_REORDER_ENABLED, false);
         tEnv.getConfig()
                 .getConfiguration()
                 .set(
@@ -208,11 +209,14 @@ public abstract class MultipleInputStreamJoinTest extends TestLogger {
         StreamTestSink.clear();
     }
 
-    @Test
-    public void testMultipleJoinsTest() {
+    @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
+    @ValueSource(booleans = {true})
+    public void testMultipleJoinsTest(boolean multipleJoinEnable) {
         tEnv.getConfig()
                 .getConfiguration()
-                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_JOIN_REORDER_ENABLED, false);
+                .set(
+                        OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED,
+                        multipleJoinEnable);
         String query =
                 "SELECT * FROM T4 "
                         + "JOIN T3 ON T4.b4 = T3.b3 "
@@ -222,17 +226,86 @@ public abstract class MultipleInputStreamJoinTest extends TestLogger {
         tEnv.executeSql(query).print();
     }
 
-    @Test
-    public void testJoins2Test() {
+    @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
+    @ValueSource(booleans = {true})
+    public void testJoins2Test(boolean multipleJoinEnable) {
         tEnv.getConfig()
                 .getConfiguration()
-                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_JOIN_REORDER_ENABLED, false);
+                .set(
+                        OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED,
+                        multipleJoinEnable);
         String query1 =
                 "SELECT * \n"
                         + "FROM source_table1\n"
                         + "JOIN source_table2 ON source_table1.id = source_table2.id\n"
                         + "JOIN source_table3 ON source_table2.id = source_table3.id\n"
                         + "JOIN source_table4 ON source_table3.id = source_table4.id;";
+        System.out.println(tEnv.explainSql(query1));
+        tEnv.executeSql(query1).print();
+    }
+
+    @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
+    @ValueSource(booleans = {true})
+    public void testJoins3(boolean multipleJoinEnable) {
+        tEnv.getConfig()
+                .getConfiguration()
+                .set(
+                        OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED,
+                        multipleJoinEnable);
+        /*Configuration conf = new Configuration();
+        conf.setString("adaptive","false");
+        env.getConfig().setGlobalJobParameters(conf);*/
+        tEnv.getConfig().setIdleStateRetention(Duration.ofHours(24));
+        tEnv.executeSql(
+                "CREATE TABLE source_table11 (\n"
+                        + "  id INT,\n"
+                        + "  age INT\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='50',\n"
+                        + "  'fields.id.kind'='sequence' ,\n"
+                        + "  'fields.id.start'='1',\n"
+                        + "  'fields.id.end'='10000'\n"
+                        + ");\n");
+        tEnv.executeSql(
+                "CREATE TABLE source_table21 (\n"
+                        + "  id INT,\n"
+                        + "  age INT\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='50',\n"
+                        + "  'fields.id.kind'='sequence' ,\n"
+                        + "  'fields.id.start'='1',\n"
+                        + "  'fields.id.end'='10000'\n"
+                        + ");\n");
+        tEnv.executeSql(
+                "CREATE TABLE source_table31 (\n"
+                        + "  id INT,\n"
+                        + "  age INT\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='50',\n"
+                        + "  'fields.id.kind'='sequence' ,\n"
+                        + "  'fields.id.start'='1',\n"
+                        + "  'fields.id.end'='10000'\n"
+                        + ");\n");
+        tEnv.executeSql(
+                "CREATE TABLE source_table41 (\n"
+                        + "  id INT,\n"
+                        + "  age INT\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='50',\n"
+                        + "  'fields.id.kind'='sequence' ,\n"
+                        + "  'fields.id.start'='1',\n"
+                        + "  'fields.id.end'='10000'\n"
+                        + ");");
+        String query1 =
+                "SELECT * \n"
+                        + "FROM source_table11\n"
+                        + "JOIN source_table21 ON source_table11.id = source_table21.id\n"
+                        + "JOIN source_table31 ON source_table11.id = source_table31.id\n"
+                        + "JOIN source_table41 ON source_table11.id = source_table41.id;";
         System.out.println(tEnv.explainSql(query1));
         tEnv.executeSql(query1).print();
     }

@@ -42,7 +42,6 @@ import static org.apache.flink.configuration.description.TextElement.text;
  */
 @PublicEvolving
 public class ExecutionConfigOptions {
-
     // ------------------------------------------------------------------------
     //  State Options
     // ------------------------------------------------------------------------
