@@ -18,6 +18,9 @@
 
 package org.apache.flink.table.planner.runtime.utils;
 
+import org.apache.flink.api.java.ExecutionEnvironment;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.config.OptimizerConfigOptions;
@@ -32,11 +35,13 @@ import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.planner.factories.TestValuesTableFactory;
 import org.apache.flink.util.TestLogger;
 
+import org.junit.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -73,34 +78,6 @@ public abstract class JoinReorderITCaseBase extends TestLogger {
                 .set(
                         ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM,
                         DEFAULT_PARALLELISM);
-        tEnv.executeSql(
-                String.format(
-                        "CREATE TABLE source_table1 (id INT,name STRING) WITH ('connector' = 'datagen','fields.id.min'='1','fields.id.max'='1000');"));
-        catalog.alterTableStatistics(
-                new ObjectPath(tEnv.getCurrentDatabase(), "source_table1"),
-                new CatalogTableStatistics(100000, 1, 1, 1),
-                false);
-        tEnv.executeSql(
-                String.format(
-                        "CREATE TABLE source_table2 (id INT,name STRING) WITH ('connector' = 'datagen','fields.id.min'='1','fields.id.max'='1000');"));
-        catalog.alterTableStatistics(
-                new ObjectPath(tEnv.getCurrentDatabase(), "source_table2"),
-                new CatalogTableStatistics(100000, 1, 1, 1),
-                false);
-        tEnv.executeSql(
-                String.format(
-                        "CREATE TABLE source_table3 (id INT,name STRING) WITH ('connector' = 'datagen','fields.id.min'='1','fields.id.max'='1000');"));
-        catalog.alterTableStatistics(
-                new ObjectPath(tEnv.getCurrentDatabase(), "source_table3"),
-                new CatalogTableStatistics(100000, 1, 1, 1),
-                false);
-        tEnv.executeSql(
-                String.format(
-                        "CREATE TABLE source_table4 (id INT,name STRING) WITH ('connector' = 'datagen','fields.id.min'='1','fields.id.max'='1000');"));
-        catalog.alterTableStatistics(
-                new ObjectPath(tEnv.getCurrentDatabase(), "source_table4"),
-                new CatalogTableStatistics(100000, 1, 1, 1),
-                false);
         // Test data
         String dataId2 = TestValuesTableFactory.registerData(TestData.data2());
         tEnv.executeSql(
@@ -249,39 +226,6 @@ public abstract class JoinReorderITCaseBase extends TestLogger {
                         "Hallo Welt,Hello,Hallo Welt,Hallo Welt",
                         "Hallo,Hi,Hallo,Hallo");
         assertEquals(query, expectedList);
-    }
-
-    @ParameterizedTest(name = "Is bushy join reorder: {0}")
-    @ValueSource(booleans = {false})
-    public void testJoins(boolean isBushyJoinReorder) {
-        tEnv.getConfig()
-                .getConfiguration()
-                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_JOIN_REORDER_ENABLED, false);
-        setIsBushyJoinReorder(isBushyJoinReorder);
-        String query =
-                "SELECT * FROM T4 "
-                        + "JOIN T3 ON T4.b4 = T3.b3 "
-                        + "JOIN T2 ON T4.b4 = T2.b2 "
-                        + "JOIN T1 ON T4.b4 = T1.b1";
-        System.out.println(tEnv.explainSql(query));
-        tEnv.executeSql(query).print();
-    }
-
-    @ParameterizedTest(name = "Is bushy join reorder: {0}")
-    @ValueSource(booleans = {false})
-    public void testJoins2(boolean isBushyJoinReorder) {
-        tEnv.getConfig()
-                .getConfiguration()
-                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_JOIN_REORDER_ENABLED, false);
-        setIsBushyJoinReorder(isBushyJoinReorder);
-        String query1 =
-                "SELECT * \n"
-                        + "FROM source_table1\n"
-                        + "JOIN source_table2 ON source_table1.id = source_table2.id\n"
-                        + "JOIN source_table3 ON source_table2.id = source_table3.id\n"
-                        + "JOIN source_table4 ON source_table3.id = source_table4.id;";
-        System.out.println(tEnv.explainSql(query1));
-        tEnv.executeSql(query1).print();
     }
 
     @ParameterizedTest(name = "Is bushy join reorder: {0}")

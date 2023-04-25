@@ -121,7 +121,6 @@ public class StreamConfig implements Serializable {
                     .noDefaultValue()
                     .withDescription(
                             "If state backend is specified, whether it uses managed memory.");
-
     // ------------------------------------------------------------------------
     //  Default Values
     // ------------------------------------------------------------------------

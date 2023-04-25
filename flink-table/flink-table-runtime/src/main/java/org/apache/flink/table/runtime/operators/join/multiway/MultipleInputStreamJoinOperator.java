@@ -18,7 +18,9 @@
 
 package org.apache.flink.table.runtime.operators.join.multiway;
 
+import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperatorV2;
 import org.apache.flink.streaming.api.operators.Input;
 import org.apache.flink.streaming.api.operators.MultipleInputStreamOperator;
@@ -30,23 +32,27 @@ import org.apache.flink.table.data.utils.MultipleInputJoinedRowData;
 import org.apache.flink.table.runtime.generated.GeneratedJoinCondition;
 import org.apache.flink.table.runtime.generated.JoinCondition;
 import org.apache.flink.table.runtime.operators.join.JoinConditionWithNullFilters;
+import org.apache.flink.table.runtime.operators.join.stream.state.AbstractMultipleInputJoinRecordStateView;
 import org.apache.flink.table.runtime.operators.join.stream.state.JoinInputSideSpec;
-import org.apache.flink.table.runtime.operators.join.stream.state.JoinRecordStateView;
-import org.apache.flink.table.runtime.operators.join.stream.state.JoinRecordStateViews;
+import org.apache.flink.table.runtime.operators.join.stream.state.MultipleInputJoinRecordStateViews;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.types.RowKind;
 
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
-import java.util.stream.StreamSupport;
 
 /**
  * The multi-join operator,only support inner join and accumulate records now.
@@ -56,7 +62,7 @@ import java.util.stream.StreamSupport;
 public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<RowData>
         implements MultipleInputStreamOperator<RowData> {
     private final int numberOfInputs;
-    private transient List<JoinRecordStateView> recordStateViews;
+    private transient List<AbstractMultipleInputJoinRecordStateView> recordStateViews;
     private transient List<List<Integer>> joinOrders;
     private final List<JoinInputSideSpec> inputSideSpecs;
     private final List<InternalTypeInfo<RowData>> internalTypeInfos;
@@ -66,8 +72,11 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     private transient List<List<JoinConditionWithNullFilters>> joinConditionLists;
     private Selectivity selectivity;
 
-    private static final Long DELAY = (long) 1 * 60;
-    private static final Long PERIOD = (long) 1 * 60;
+    private static final Long DELAY = (long) 60;
+    private static final Long PERIOD = (long) 60;
+
+    final Logger logger = LoggerFactory.getLogger(MultipleInputStreamJoinOperator.class);
+    boolean adaptive = true;
 
     public MultipleInputStreamJoinOperator(
             StreamOperatorParameters<RowData> parameters,
@@ -90,9 +99,21 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         selectivity = new Selectivity();
         updateJoinOrders();
         this.joinConditionLists = getConditions();
-        this.recordStateViews = getInitStates();
+        initStates();
         this.collector = new TimestampedCollector<>(output);
-        setUpdateScheduledExecutor();
+        //ExecutionConfig.GlobalJobParameters globalParams = getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
+        ExecutionConfig.GlobalJobParameters globalJobParameters = getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
+        Map<String, String> globConf = globalJobParameters.toMap();
+        if (globConf.containsKey("adaptive")){
+            if(globConf.get("adaptive").equals("false")){
+                adaptive = false;
+                logger.info("MJ operator's adaptive closed!");
+            }
+        }
+        if(adaptive){
+            setUpdateScheduledExecutor();
+        }
+        logger.info("open");
     }
 
     private void setUpdateScheduledExecutor() {
@@ -101,6 +122,9 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                     public void run() {
                         selectivity.updateSelectivity();
                         updateJoinOrders();
+                        printUpdateInfos();
+                        selectivity.resetCount();
+                        printUpdateInfos();
                     }
                 };
         ScheduledExecutorService service =
@@ -180,11 +204,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                                     joinConditionLists.get(inputIndex).get(joinIndex));
                 }
                 selectivity.matchCount[inputIndex][joinIndex] += associatedRows.size();
-                selectivity.rowsCount[inputIndex][joinIndex] +=
-                        StreamSupport.stream(
-                                        recordStateViews.get(joinIndex).getRecords().spliterator(),
-                                        false)
-                                .count();
+                selectivity.rowsCount[inputIndex][joinIndex] += recordStateViews.get(joinIndex).getRecordSize();
                 if (associatedRows.isEmpty()) {
                     doCollect = false;
                     break;
@@ -218,12 +238,12 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     }
 
     /** init states */
-    private List<JoinRecordStateView> getInitStates() {
-        List<JoinRecordStateView> recordStateViews = new ArrayList<>();
+    private void initStates() {
+        recordStateViews = new ArrayList<>();
         for (int i = 0; i < numberOfInputs; i++) {
             String stateName = "input" + i;
-            JoinRecordStateView joinRecordStateView =
-                    JoinRecordStateViews.create(
+            AbstractMultipleInputJoinRecordStateView joinRecordStateView =
+                    MultipleInputJoinRecordStateViews.create(
                             getRuntimeContext(),
                             stateName,
                             inputSideSpecs.get(i),
@@ -231,7 +251,6 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                             stateRetentionTime);
             recordStateViews.add(joinRecordStateView);
         }
-        return recordStateViews;
     }
 
     /** get JoinConditionWithNullFilters */
@@ -258,7 +277,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     public static List<RowData> matchRows(
             RowData input,
             boolean inputIsLeft,
-            JoinRecordStateView otherSideStateView,
+            AbstractMultipleInputJoinRecordStateView otherSideStateView,
             JoinCondition condition)
             throws Exception {
         List<RowData> associations = new ArrayList<>();
@@ -309,16 +328,13 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     private void updateJoinOrders() {
         List<List<Integer>> joinOrders = new ArrayList<>();
         for (int i = 0; i < numberOfInputs; i++) {
-            List<Double> selectivities = selectivity.selectivity.get(i);
+            List<Double> selectivities = selectivity.selectivities.get(i);
             List<Integer> order = new ArrayList<>();
-            // get original index
-            int[] indexArr = IntStream.range(0, selectivities.size()).toArray();
-
             // sort original list and get correspond index
             int[] sortedIndexArr =
                     IntStream.range(0, selectivities.size())
                             .boxed()
-                            .sorted(Comparator.comparing(selectivities::get))
+                            .sorted(Comparator.comparingDouble(selectivities::get))
                             .mapToInt(Integer::intValue)
                             .toArray();
             for (int index : sortedIndexArr) {
@@ -329,13 +345,21 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         this.joinOrders = joinOrders;
     }
 
+    private void printUpdateInfos() {
+        logger.info(String.format("new rowscount：%s", Arrays.deepToString(selectivity.rowsCount)));
+        logger.info(
+                String.format("new matchcount：%s", Arrays.deepToString(selectivity.matchCount)));
+        logger.info("new selectivities：" + selectivity.selectivities);
+        logger.info("new join order：" + joinOrders);
+    }
+
     private class Selectivity {
         // matchCount[i][j] means the count of matched rows during ith input visiting the jth input
         public int[][] matchCount = new int[numberOfInputs][numberOfInputs];
         // rowsCount[i][j] means the sum of jth input count during visiting
         public Long[][] rowsCount = new Long[numberOfInputs][numberOfInputs];
         // selectivity[i][j] means the selectivity
-        public List<List<Double>> selectivity;
+        public List<List<Double>> selectivities;
 
         public Selectivity() {
             initSelectivity();
@@ -351,7 +375,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                 }
                 selectivities.add(selectivity);
             }
-            this.selectivity = selectivities;
+            this.selectivities = selectivities;
         }
 
         public void updateSelectivity() {
@@ -360,11 +384,21 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                     if (i == j) {
                         continue;
                     }
-                    if (matchCount[i][j] != 0) {
-                        selectivity.get(i).set(j, (double) (matchCount[i][j] / rowsCount[i][j]));
+                    if (rowsCount[i][j] != 0) {
+                        selectivities.get(i).set(j, (double)matchCount[i][j] / (double)rowsCount[i][j]);
                     }
                 }
             }
+        }
+
+        public void resetCount() {
+            for (int i = 0; i < numberOfInputs; i++) {
+                for (int j = 0; j < numberOfInputs; j++) {
+                    this.rowsCount[i][j] = 0L;
+                    this.matchCount[i][j] = 0;
+                }
+            }
+            logger.info("reset counts");
         }
     }
 }
