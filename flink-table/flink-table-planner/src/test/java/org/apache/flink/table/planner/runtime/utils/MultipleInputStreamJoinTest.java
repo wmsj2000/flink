@@ -19,6 +19,7 @@
 package org.apache.flink.table.planner.runtime.utils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.table.api.EnvironmentSettings;
@@ -252,9 +253,10 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                 .set(
                         OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED,
                         multipleJoinEnable);
-        /*Configuration conf = new Configuration();
+        Configuration conf = new Configuration();
         conf.setString("adaptive","false");
-        env.getConfig().setGlobalJobParameters(conf);*/
+        conf.setString("period","10s");
+        env.getConfig().setGlobalJobParameters(conf);
         tEnv.getConfig().setIdleStateRetention(Duration.ofHours(24));
         tEnv.executeSql(
                 "CREATE TABLE source_table11 (\n"

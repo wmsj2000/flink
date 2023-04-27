@@ -70,8 +70,8 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     private transient List<List<JoinConditionWithNullFilters>> joinConditionLists;
     private Selectivity selectivity;
 
-    private static final Long DELAY = (long) 60;
-    private static final Long PERIOD = (long) 60;
+    private static Long DELAY = (long) 60;
+    private static Long PERIOD = (long) 60;
 
     final Logger logger = LoggerFactory.getLogger(MultipleInputStreamJoinOperator.class);
     boolean adaptive = true;
@@ -108,6 +108,16 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
             if (globConf.get("adaptive").equals("false")) {
                 adaptive = false;
                 logger.info("MJ operator's adaptive closed!");
+            }
+        }
+        if (globConf.containsKey("period")) {
+
+            try {
+                PERIOD = Long.parseLong(globConf.get("period"));
+                DELAY =  Long.parseLong(globConf.get("period"));
+            } catch (NumberFormatException e) {
+                PERIOD = 30L;
+                DELAY = 30L;
             }
         }
         if (adaptive) {
