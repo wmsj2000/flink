@@ -47,7 +47,8 @@ import java.util.Queue;
  */
 public class MultipleInputStreamJoinNodeCreationProcessor implements ExecNodeGraphProcessor {
 
-    public MultipleInputStreamJoinNodeCreationProcessor() {}
+    public MultipleInputStreamJoinNodeCreationProcessor() {
+    }
 
     @Override
     public ExecNodeGraph process(ExecNodeGraph execGraph, ProcessorContext context) {

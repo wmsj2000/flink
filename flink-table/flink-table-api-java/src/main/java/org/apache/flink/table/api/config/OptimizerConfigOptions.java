@@ -164,7 +164,6 @@ public class OptimizerConfigOptions {
                     .withDescription(
                             "When it is true, the optimizer will merge join operators"
                                     + "into a multiple input join operator to reduce shuffling and redundant memory. Default value is true.");
-
     @Documentation.TableOption(execMode = Documentation.ExecMode.BATCH_STREAMING)
     public static final ConfigOption<Boolean> TABLE_OPTIMIZER_DYNAMIC_FILTERING_ENABLED =
             key("table.optimizer.dynamic-filtering.enabled")
