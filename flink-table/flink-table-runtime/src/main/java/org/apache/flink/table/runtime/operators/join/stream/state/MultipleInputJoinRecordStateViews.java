@@ -97,7 +97,7 @@ public final class MultipleInputJoinRecordStateViews {
 
         @Override
         public void addRecord(RowData record) throws Exception {
-            if(recordState.value()==null){
+            if (recordState.value() == null) {
                 recordSize++;
             }
             recordState.update(record);

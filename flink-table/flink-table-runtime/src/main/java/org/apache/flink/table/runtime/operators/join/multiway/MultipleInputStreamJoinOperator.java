@@ -114,7 +114,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
 
             try {
                 PERIOD = Long.parseLong(globConf.get("period"));
-                DELAY =  Long.parseLong(globConf.get("period"));
+                DELAY = Long.parseLong(globConf.get("period"));
             } catch (NumberFormatException e) {
                 PERIOD = 30L;
                 DELAY = 30L;
