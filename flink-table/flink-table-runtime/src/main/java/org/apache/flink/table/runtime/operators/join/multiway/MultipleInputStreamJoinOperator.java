@@ -130,11 +130,14 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         Runnable runable =
                 new Runnable() {
                     public void run() {
+                        long start = System.currentTimeMillis();
                         selectivity.updateSelectivity();
                         updateJoinOrders();
                         printUpdateInfos();
-                        selectivity.resetCount();
-                        printUpdateInfos();
+                        // selectivity.resetCount();
+                        long end = System.currentTimeMillis();
+                        long updateTime = end - start;
+                        logger.info("update time:" + updateTime + "ms");
                     }
                 };
         ScheduledExecutorService service =
