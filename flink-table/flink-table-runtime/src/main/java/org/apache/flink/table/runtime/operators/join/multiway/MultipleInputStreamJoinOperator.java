@@ -385,7 +385,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     private void printUpdateInfos() {
         // logger.info("new rowscount：" + selectivity.rowsCount);
         // logger.info("new matchedRowsCount：" + selectivity.matchedRowsCount);
-        // logger.info("new selectivities：" + selectivity.selectivities);
+        logger.info("new selectivities：" + selectivity.selectivities);
         logger.info("new match rate：" + selectivity.matchRates);
         logger.info("new join order：" + joinOrders);
     }
