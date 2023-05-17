@@ -247,6 +247,24 @@ public class MultipleInputStreamJoinTest extends TestLogger {
 
     @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
     @ValueSource(booleans = {true})
+    public void testJoins3Test(boolean multipleJoinEnable) {
+        tEnv.getConfig()
+                .getConfiguration()
+                .set(
+                        OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED,
+                        multipleJoinEnable);
+        String query1 =
+                "SELECT * \n"
+                        + "FROM source_table3\n"
+                        + "JOIN source_table1 ON source_table3.id = source_table1.id\n"
+                        + "JOIN source_table4 ON source_table3.id = source_table4.id\n"
+                        + "JOIN source_table2 ON source_table3.id = source_table2.id;";
+        System.out.println(tEnv.explainSql(query1));
+        tEnv.executeSql(query1).print();
+    }
+
+    @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
+    @ValueSource(booleans = {true})
     public void testJoins3(boolean multipleJoinEnable) {
         tEnv.getConfig()
                 .getConfiguration()
@@ -255,7 +273,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         multipleJoinEnable);
         Configuration conf = new Configuration();
         conf.setString("adaptive", "false");
-        conf.setString("period", "10s");
+        conf.setString("period", "10");
         env.getConfig().setGlobalJobParameters(conf);
         tEnv.getConfig().setIdleStateRetention(Duration.ofHours(24));
         tEnv.executeSql(
