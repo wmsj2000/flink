@@ -286,7 +286,6 @@ public class CopyOnWriteStateMap<K, N, S> extends StateMap<K, N, S> {
                     e.stateVersion = stateMapVersion;
                     e.state = getStateSerializer().copy(e.state);
                 }
-
                 return e.state;
             }
         }

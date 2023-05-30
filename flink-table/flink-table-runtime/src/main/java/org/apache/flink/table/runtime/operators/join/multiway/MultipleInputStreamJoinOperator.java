@@ -73,7 +73,9 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     private static Long PERIOD = (long) 30;
 
     final Logger logger = LoggerFactory.getLogger(MultipleInputStreamJoinOperator.class);
-    boolean adaptive = true;
+    private boolean adaptive = true;
+    private long matchTimeAll = 0L;
+    private long corssJoinTimeAll = 0L;
 
     public MultipleInputStreamJoinOperator(
             StreamOperatorParameters<RowData> parameters,
@@ -94,7 +96,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     public void open() throws Exception {
         super.open();
         selectivity = new Selectivity();
-        updateJoinOrders();
+        updateJoinOrdersByMatchRate();
         this.joinConditionLists = getConditions();
         initStates();
         this.collector = new TimestampedCollector<>(output);
@@ -119,9 +121,9 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                 DELAY = 30L;
             }
         }
-        logger.info("period:" + PERIOD);
         if (adaptive) {
             setUpdateScheduledExecutor();
+            logger.info("period:" + PERIOD);
         }
         logger.info("open");
     }
@@ -199,6 +201,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         // associatedRowsList,add inputList to the right position
         associatedRowsList.set(inputIndex, inputList);
         // get associated rows list,every associated rows correspond to matched rows in every state
+        long startTime0 = System.nanoTime();
         for (int joinIndex : joinOrder) {
             if (joinIndex != inputIndex) {
                 List<RowData> associatedRows;
@@ -217,9 +220,9 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                                     recordStateViews.get(joinIndex),
                                     joinConditionLists.get(inputIndex).get(joinIndex));
                 }
-                selectivity.matchedRowsCount[inputIndex][joinIndex] += associatedRows.size();
+/*                selectivity.matchedRowsCount[inputIndex][joinIndex] += associatedRows.size();
                 selectivity.rowsCount[inputIndex][joinIndex] +=
-                        recordStateViews.get(joinIndex).getRecordSize();
+                        recordStateViews.get(joinIndex).getRecordSize();*/
                 selectivity.matchCount[inputIndex][joinIndex] += associatedRows.size() > 0 ? 1 : 0;
                 selectivity.probeCount[inputIndex][joinIndex] += 1;
                 if (associatedRows.isEmpty()) {
@@ -229,10 +232,16 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                 associatedRowsList.set(joinIndex, associatedRows);
             }
         }
+        long endTime0 = System.nanoTime();
+        matchTimeAll += (endTime0-startTime0);
+
         // if every associatedRows is not empty
         if (doCollect) {
             // using cross join to convert associated rows list
+            long startTime = System.nanoTime();
             List<List<RowData>> joinedRows = crossJoin(associatedRowsList);
+            long endTime = System.nanoTime();
+            corssJoinTimeAll += (endTime-startTime);
             for (List<RowData> joinedRow : joinedRows) {
                 collector.collect(new MultipleInputJoinedRowData(RowKind.INSERT, joinedRow));
             }
@@ -342,7 +351,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         return result;
     }
 
-    private void updateJoinOrders() {
+/*    private void updateJoinOrders() {
         List<List<Integer>> joinOrders = new ArrayList<>();
         for (int i = 0; i < numberOfInputs; i++) {
             List<Double> selectivities = selectivity.selectivities.get(i);
@@ -360,7 +369,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
             joinOrders.add(order);
         }
         this.joinOrders = joinOrders;
-    }
+    }*/
 
     private void updateJoinOrdersByMatchRate() {
         List<List<Integer>> joinOrders = new ArrayList<>();
@@ -385,7 +394,9 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     private void printUpdateInfos() {
         // logger.info("new rowscount：" + selectivity.rowsCount);
         // logger.info("new matchedRowsCount：" + selectivity.matchedRowsCount);
-        logger.info("new selectivities：" + selectivity.selectivities);
+        /*logger.info("new selectivities：" + selectivity.selectivities);*/
+        logger.info("match time:" + matchTimeAll);
+        logger.info("cross join time: "+ corssJoinTimeAll);
         logger.info("new match rate：" + selectivity.matchRates);
         logger.info("new join order：" + joinOrders);
     }
@@ -393,10 +404,10 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     private class Selectivity {
         // matchedRowsCount[i][j] means the count of matched rows during ith input visiting the jth
         // input
-        public Long[][] matchedRowsCount = new Long[numberOfInputs][numberOfInputs];
+/*        public Long[][] matchedRowsCount = new Long[numberOfInputs][numberOfInputs];
         // rowsCount[i][j] means the sum of jth input count during visiting
         public Long[][] rowsCount = new Long[numberOfInputs][numberOfInputs];
-        // selectivity[i][j] means the selectivity
+        // selectivity[i][j] means the selectivity*/
         public List<List<Double>> selectivities;
         public Long[][] matchCount = new Long[numberOfInputs][numberOfInputs];
         public Long[][] probeCount = new Long[numberOfInputs][numberOfInputs];
@@ -407,23 +418,25 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         }
 
         private void initSelectivity() {
-            List<List<Double>> selectivities = new ArrayList<>();
+            /*List<List<Double>> selectivities = new ArrayList<>();*/
             List<List<Double>> matchRates = new ArrayList<>();
             for (int i = 0; i < numberOfInputs; i++) {
-                List<Double> selectivity = new ArrayList<>();
+                /*List<Double> selectivity = new ArrayList<>();*/
                 List<Double> matchRate = new ArrayList<>();
                 for (int j = 0; j < numberOfInputs; j++) {
-                    selectivity.add(1.0);
+                    /*selectivity.add(1.0);*/
                     matchRate.add(1.0);
-                    this.matchedRowsCount[i][j] = 0L;
-                    this.rowsCount[i][j] = 0L;
+/*                    this.matchedRowsCount[i][j] = 0L;
+                    this.rowsCount[i][j] = 0L;*/
                     this.matchCount[i][j] = 0L;
                     this.probeCount[i][j] = 0L;
                 }
-                selectivities.add(selectivity);
+                /*selectivities.add(selectivity);*/
                 matchRates.add(matchRate);
             }
+/*
             this.selectivities = selectivities;
+*/
             this.matchRates = matchRates;
         }
 
@@ -433,11 +446,11 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                     if (i == j) {
                         continue;
                     }
-                    if (rowsCount[i][j] != 0) {
+/*                    if (rowsCount[i][j] != 0) {
                         selectivities
                                 .get(i)
                                 .set(j, (double) matchedRowsCount[i][j] / (double) rowsCount[i][j]);
-                    }
+                    }*/
                     if (probeCount[i][j] != 0) {
                         matchRates
                                 .get(i)
@@ -450,8 +463,8 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         public void resetCount() {
             for (int i = 0; i < numberOfInputs; i++) {
                 for (int j = 0; j < numberOfInputs; j++) {
-                    this.rowsCount[i][j] = 0L;
-                    this.matchedRowsCount[i][j] = 0L;
+/*                    this.rowsCount[i][j] = 0L;
+                    this.matchedRowsCount[i][j] = 0L;*/
                     this.matchCount[i][j] = 0L;
                     this.probeCount[i][j] = 0L;
                 }
