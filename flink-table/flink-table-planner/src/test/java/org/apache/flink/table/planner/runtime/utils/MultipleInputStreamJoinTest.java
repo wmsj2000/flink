@@ -272,8 +272,11 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED,
                         multipleJoinEnable);
         Configuration conf = new Configuration();
-        conf.setString("adaptive", "false");
-        conf.setString("period", "10");
+        conf.setString("adaptive", "true");
+        conf.setString("period", "20");
+        conf.setString("delay", "20");
+        conf.setString("collect", "5");
+        conf.setString("reset", "true");
         env.getConfig().setGlobalJobParameters(conf);
         tEnv.getConfig().setIdleStateRetention(Duration.ofHours(24));
         tEnv.executeSql(
