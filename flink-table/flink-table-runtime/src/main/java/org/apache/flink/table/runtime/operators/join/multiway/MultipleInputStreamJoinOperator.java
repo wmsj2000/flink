@@ -43,12 +43,12 @@ import org.slf4j.LoggerFactory;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -76,7 +76,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     private static Long COLLECTTIME = (long) 10;
     private static boolean isAdaptive = false;
     private boolean isCollecting = false;
-    private boolean resetCount = true;
+    private boolean resetCount = false;
     private long matchTimeAll = 0L;
     private long corssJoinTimeAll = 0L;
 
@@ -95,87 +95,23 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         this.internalTypeInfos = internalTypeInfos;
         this.generatedJoinConditionsList = generatedJoinConditionsList;
         this.stateRetentionTime = stateRetentionTime;
-
     }
 
     @Override
     public void open() throws Exception {
         super.open();
-        this.selectivity = new Selectivity();
-        updateJoinOrdersByMatchRate();
+        initOrders();
         initStates();
         getParameters();
+        this.selectivity = new Selectivity();
         this.joinConditionLists = getConditions();
         this.collector = new TimestampedCollector<>(output);
-        //set update scheduled executor
-        if(isAdaptive) {
+        // set update scheduled executor
+        if (isAdaptive) {
             setUpdateScheduledExecutor();
-        } else{
+        } else {
             logger.info("\nMJ operator's adaptive closed!");
         }
-    }
-
-    private void getParameters() {
-        ExecutionConfig.GlobalJobParameters globalJobParameters =
-                getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
-        Map<String, String> globConf = globalJobParameters.toMap();
-        try {
-            String adaptive = globConf.getOrDefault("adaptive","false");
-            isAdaptive = Boolean.parseBoolean(adaptive);
-            String period = globConf.getOrDefault("period","60");
-            PERIOD = Long.parseLong(period);
-            String delay = globConf.getOrDefault("delay","30");
-            DELAY = Long.parseLong(delay);
-            String collect = globConf.getOrDefault("collect","10");
-            COLLECTTIME = Long.parseLong(collect);
-            String reset = globConf.getOrDefault("reset","false");
-            resetCount = Boolean.parseBoolean(reset);
-        }catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-    }
-
-    private void setUpdateScheduledExecutor() {
-        Runnable task1 =
-                new Runnable() {
-                    public void run() {
-                        isCollecting = true;
-                        SimpleDateFormat formatter= new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss z");
-                        Date date = new Date(System.currentTimeMillis());
-                        logger.info("collect true："+formatter.format(date));
-                    }
-                };
-        Runnable task2 =
-                new Runnable() {
-                    public void run() {
-                        selectivity.updateSelectivity();
-                        updateJoinOrdersByMatchRate();
-                        printUpdateInfos();
-                        if(resetCount){
-                            selectivity.resetCount();
-                        }
-                        isCollecting = false;
-                        SimpleDateFormat formatter= new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss z");
-                        Date date = new Date(System.currentTimeMillis());
-                        logger.info("collect false："+formatter.format(date));
-                    }
-                };
-        ScheduledExecutorService service =
-                new ScheduledThreadPoolExecutor(
-                        1,
-                        new BasicThreadFactory.Builder()
-                                .namingPattern("update-schedule-pool-%d")
-                                .daemon(true)
-                                .build());
-        logger.info(
-                "\nMJ operator's adaptive open!"+"\n"+
-                        "delay:"+ DELAY +"s"+"\n"+
-                        "period:"+ PERIOD +"s"+"\n"+
-                        "collect time:"+ COLLECTTIME +"s"
-        );
-        service.scheduleAtFixedRate(task1, DELAY, PERIOD, TimeUnit.SECONDS);
-        service.scheduleAtFixedRate(task2, DELAY+COLLECTTIME,PERIOD, TimeUnit.SECONDS);
     }
 
     @Override
@@ -198,6 +134,97 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
             inputs.add(input);
         }
         return inputs;
+    }
+
+
+    private void getParameters() {
+        ExecutionConfig.GlobalJobParameters globalJobParameters =
+                getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
+        Map<String, String> globConf = globalJobParameters.toMap();
+        try {
+            String adaptive = globConf.getOrDefault("adaptive", "false");
+            isAdaptive = Boolean.parseBoolean(adaptive);
+            String period = globConf.getOrDefault("period", "60");
+            PERIOD = Long.parseLong(period);
+            String delay = globConf.getOrDefault("delay", "30");
+            DELAY = Long.parseLong(delay);
+            String collect = globConf.getOrDefault("collect", "10");
+            COLLECTTIME = Long.parseLong(collect);
+            String reset = globConf.getOrDefault("reset", "false");
+            resetCount = Boolean.parseBoolean(reset);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void setUpdateScheduledExecutor() {
+        Runnable task1 =
+                new Runnable() {
+                    public void run() {
+                        isCollecting = true;
+                        SimpleDateFormat formatter =
+                                new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss z");
+                        Date date = new Date(System.currentTimeMillis());
+                        logger.info("collect true：" + formatter.format(date));
+                    }
+                };
+        Runnable task2 =
+                new Runnable() {
+                    public void run() {
+                        selectivity.updateSelectivity();
+                        updateJoinOrdersByMatchRate();
+                        printUpdateInfos();
+                        if (resetCount) {
+                            selectivity.resetCount();
+                        }
+                        isCollecting = false;
+                        SimpleDateFormat formatter =
+                                new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss z");
+                        Date date = new Date(System.currentTimeMillis());
+                        logger.info("collect false：" + formatter.format(date));
+                    }
+                };
+        ScheduledExecutorService service =
+                new ScheduledThreadPoolExecutor(
+                        1,
+                        new BasicThreadFactory.Builder()
+                                .namingPattern("update-schedule-pool-%d")
+                                .daemon(true)
+                                .build());
+        logger.info(
+                "\nMJ operator's adaptive open!"
+                        + "\n"
+                        + "delay:"
+                        + DELAY
+                        + "s"
+                        + "\n"
+                        + "period:"
+                        + PERIOD
+                        + "s"
+                        + "\n"
+                        + "collect time:"
+                        + COLLECTTIME
+                        + "s");
+        service.scheduleAtFixedRate(task1, DELAY, PERIOD, TimeUnit.SECONDS);
+        service.scheduleAtFixedRate(task2, DELAY + COLLECTTIME, PERIOD, TimeUnit.SECONDS);
+    }
+
+    private void printUpdateInfos() {
+        logger.info(
+                "\nmatch time:"
+                        + matchTimeAll
+                        + "\n"
+                        + "cross join time: "
+                        + corssJoinTimeAll
+                        + "\n"
+                        + "new match rate："
+                        + Arrays.deepToString(selectivity.matchRates)
+                        + "\n"
+                        + "new avgOfBeMatched："
+                        + Arrays.deepToString(selectivity.avgOfBeMatched)
+                        + "\n"
+                        + "new join order："
+                        + joinOrders);
     }
 
     /**
@@ -245,13 +272,19 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                                     recordStateViews.get(joinIndex),
                                     joinConditionLists.get(inputIndex).get(joinIndex));
                 }
-                if(isCollecting&isAdaptive){
-                    selectivity.matchCount[inputIndex][joinIndex] += associatedRows.size() > 0 ? 1 : 0;
+                long numberOfAssociated = associatedRows.size();
+                if(numberOfAssociated>0){
+                    selectivity.countOfBeMatched[inputIndex][joinIndex] += 1;
+                    selectivity.sumOfBeMatched[inputIndex][joinIndex] += numberOfAssociated;
+                }
+                if (isCollecting & isAdaptive) {
+                    selectivity.matchCount[inputIndex][joinIndex] +=
+                            numberOfAssociated > 0 ? 1 : 0;
                     selectivity.probeCount[inputIndex][joinIndex] += 1;
                 }
                 if (associatedRows.isEmpty()) {
                     doCollect = false;
-                    if(!isCollecting){
+                    if (!isCollecting) {
                         break;
                     }
                 }
@@ -259,33 +292,18 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
             }
         }
         long endTime0 = System.nanoTime();
-        matchTimeAll += (endTime0-startTime0);
+        matchTimeAll += (endTime0 - startTime0);
         // if every associatedRows is not empty
         if (doCollect) {
             // using cross join to convert associated rows list
             long startTime = System.nanoTime();
             List<List<RowData>> joinedRows = crossJoin(associatedRowsList);
             long endTime = System.nanoTime();
-            corssJoinTimeAll += (endTime-startTime);
+            corssJoinTimeAll += (endTime - startTime);
             for (List<RowData> joinedRow : joinedRows) {
                 collector.collect(new MultipleInputJoinedRowData(RowKind.INSERT, joinedRow));
             }
         }
-    }
-    /** initialize the join order according the input order */
-    private List<List<Integer>> getInitOrders() {
-        int numberOfInputs = this.numberOfInputs;
-        List<List<Integer>> orders = new ArrayList<>();
-        for (int i = 0; i < numberOfInputs; i++) {
-            List<Integer> order = new ArrayList<>();
-            for (int j = 0; j < numberOfInputs; j++) {
-                if (j != i) {
-                    order.add(j);
-                }
-            }
-            orders.add(order);
-        }
-        return orders;
     }
 
     /** init states */
@@ -376,57 +394,111 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         return result;
     }
 
-    private void updateJoinOrdersByMatchRate() {
-        List<List<Integer>> joinOrders = new ArrayList<>();
+    /** initialize the join order according the input order */
+    private void initOrders() {
+        int numberOfInputs = this.numberOfInputs;
+        List<List<Integer>> orders = new ArrayList<>();
         for (int i = 0; i < numberOfInputs; i++) {
-            List<Double> matchRates = selectivity.matchRates.get(i);
             List<Integer> order = new ArrayList<>();
-            // sort original list and get correspond index
-            int[] sortedIndexArr =
-                    IntStream.range(0, matchRates.size())
-                            .boxed()
-                            .sorted(Comparator.comparingDouble(matchRates::get))
-                            .mapToInt(Integer::intValue)
-                            .toArray();
-            for (int index : sortedIndexArr) {
-                order.add(index);
+            for (int j = 0; j < numberOfInputs; j++) {
+                if (j != i) {
+                    order.add(j);
+                }
             }
-            joinOrders.add(order);
+            orders.add(order);
+        }
+        this.joinOrders = orders;
+    }
+    private void updateJoinOrdersByMatchRate() {
+        List<List<Integer>> initOrders = new ArrayList<>();
+        for (int i = 0; i < numberOfInputs; i++) {
+            List<Integer> order = new ArrayList<>();
+            for (int j = 0; j < numberOfInputs; j++) {
+                if (j != i) {
+                    order.add(j);
+                }
+            }
+            initOrders.add(order);
+        }
+        List<List<Integer>> joinOrders = new ArrayList<>();
+        for(int i=0;i<numberOfInputs;i++){
+            List<Integer> joinOrder = initOrders.get(i);
+            List<List<Integer>> allOrders  = permute(initOrders.get(i));
+            double minCost = Integer.MAX_VALUE;
+            for(List<Integer> order:allOrders){
+                double cost = calculateTotalCost(selectivity.matchRates[i],selectivity.avgOfBeMatched[i],order);
+                if(cost<minCost){
+                    minCost = cost;
+                    joinOrder = order;
+                }
+            }
+            joinOrders.add(joinOrder);
         }
         this.joinOrders = joinOrders;
     }
 
-    private void printUpdateInfos() {
-        logger.info(
-                "\nmatch time:" + matchTimeAll+"\n"+
-                "cross join time: "+ corssJoinTimeAll+"\n"+
-                "new match rate：" + selectivity.matchRates+"\n"+
-                "new join order：" + joinOrders
-        );
+    public double calculateTotalCost(double[] rate, double[] cost, List<Integer> indexOrder) {
+        return calculateTotalCostHelper(rate, cost, indexOrder, 0);
+    }
+
+    private double calculateTotalCostHelper(double[] rate, double[] cost, List<Integer> indexOrder, int index) {
+        if (index == indexOrder.size()) {
+            return 0;
+        }
+        int current = indexOrder.get(index);
+        double subCost = calculateTotalCostHelper(rate, cost, indexOrder, index + 1);
+        return rate[current] * (cost[current] + subCost);
+    }
+
+    public static List<List<Integer>> permute(List<Integer> nums) {
+        List<List<Integer>> res = new ArrayList<>();
+        if (nums.size() == 1) {
+            List<Integer> list = new ArrayList<>();
+            list.add(nums.get(0));
+            res.add(list);
+            return res;
+        }
+        for (int i = 0; i < nums.size(); i++) {
+            List<Integer> rest = getRest(nums, i);
+            List<List<Integer>> restPermutes = permute(rest);
+            for (List<Integer> permute : restPermutes) {
+                List<Integer> list = new ArrayList<>();
+                list.add(nums.get(i));
+                list.addAll(permute);
+                res.add(list);
+            }
+        }
+        return res;
+    }
+
+    private static List<Integer> getRest(List<Integer> nums, int index) {
+        List<Integer> rest = new ArrayList<>();
+        for (int i = 0; i < nums.size(); i++) {
+            if (i != index) {
+                rest.add(nums.get(i));
+            }
+        }
+        return rest;
     }
 
     private class Selectivity {
-        public List<List<Double>> selectivities;
-        public Long[][] matchCount = new Long[numberOfInputs][numberOfInputs];
-        public Long[][] probeCount = new Long[numberOfInputs][numberOfInputs];
-        public List<List<Double>> matchRates;
+        public long[][] matchCount = new long[numberOfInputs][numberOfInputs];
+        public long[][] probeCount = new long[numberOfInputs][numberOfInputs];
+        public double[][] matchRates = new double[numberOfInputs][numberOfInputs];
+        public long[][] sumOfBeMatched = new long[numberOfInputs][numberOfInputs];
+        public long[][] countOfBeMatched = new long[numberOfInputs][numberOfInputs];
+        public double[][] avgOfBeMatched = new double[numberOfInputs][numberOfInputs];
 
         public Selectivity() {
             initSelectivity();
         }
 
         private void initSelectivity() {
-            List<List<Double>> matchRates = new ArrayList<>();
             for (int i = 0; i < numberOfInputs; i++) {
-                List<Double> matchRate = new ArrayList<>();
                 for (int j = 0; j < numberOfInputs; j++) {
-                    matchRate.add(1.0);
-                    this.matchCount[i][j] = 0L;
-                    this.probeCount[i][j] = 0L;
+                    matchRates[i][j] = 1.0;
                 }
-                matchRates.add(matchRate);
             }
-            this.matchRates = matchRates;
         }
 
         public void updateSelectivity() {
@@ -435,10 +507,9 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                     if (i == j) {
                         continue;
                     }
-                    if (probeCount[i][j] != 0) {
-                        matchRates
-                                .get(i)
-                                .set(j, (double) matchCount[i][j] / (double) probeCount[i][j]);
+                    if (probeCount[i][j] != 0 && countOfBeMatched[i][j]!=0) {
+                        matchRates[i][j] = (double) matchCount[i][j] / (double) probeCount[i][j];
+                        avgOfBeMatched[i][j] = (double)sumOfBeMatched[i][j]/(double) countOfBeMatched[i][j];
                     }
                 }
             }
