@@ -237,8 +237,8 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         multipleJoinEnable);
         Configuration conf = new Configuration();
         conf.setString("adaptive", "true");
-        conf.setString("period", "10");
-        conf.setString("delay", "0");
+        conf.setString("period", "60");
+        conf.setString("delay", "30");
         conf.setString("collect", "5");
         conf.setString("reset", "false");
         env.getConfig().setGlobalJobParameters(conf);
@@ -281,7 +281,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         multipleJoinEnable);
         Configuration conf = new Configuration();
         conf.setString("adaptive", "true");
-        conf.setString("period", "10");
+        conf.setString("period", "30");
         conf.setString("delay", "0");
         conf.setString("collect", "5");
         conf.setString("reset", "false");
