@@ -75,7 +75,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     private static boolean isAdaptive = false;
     private boolean isCollecting = false;
     private boolean resetCount = false;
-    private double QUERY_COST_COFFICIENT = 5.0;
+    private double QUERY_COST_COFFICIENT = 1.0;
     private double MATCH_COST_COFFICIENT = 1.0;
     private long queryTime = 0;
     private long queryCount = 0;
@@ -147,9 +147,9 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         try {
             String adaptive = globConf.getOrDefault("adaptive", "false");
             isAdaptive = Boolean.parseBoolean(adaptive);
-            String period = globConf.getOrDefault("period", "60");
+            String period = globConf.getOrDefault("period", "120");
             PERIOD = Long.parseLong(period);
-            String delay = globConf.getOrDefault("delay", "30");
+            String delay = globConf.getOrDefault("delay", "60");
             DELAY = Long.parseLong(delay);
             String collect = globConf.getOrDefault("collect", "3");
             COLLECTTIME = Long.parseLong(collect);
@@ -157,7 +157,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
             resetCount = Boolean.parseBoolean(reset);
             String queryCost = globConf.getOrDefault("query_cost", "1");
             QUERY_COST_COFFICIENT = Double.parseDouble(queryCost);
-            String matchCost = globConf.getOrDefault("match_cost", "10");
+            String matchCost = globConf.getOrDefault("match_cost", "1");
             MATCH_COST_COFFICIENT = Double.parseDouble(matchCost);
             stateBackend = globConf.getOrDefault("stateBackend", "fileSystem");
         } catch (Exception e) {
