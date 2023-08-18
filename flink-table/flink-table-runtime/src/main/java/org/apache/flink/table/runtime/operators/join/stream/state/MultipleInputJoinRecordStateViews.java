@@ -106,7 +106,7 @@ public final class MultipleInputJoinRecordStateViews {
         @Override
         public void retractRecord(RowData record) throws Exception {
             recordState.clear();
-            Long keyedSize = StreamSupport.stream(getRecords().spliterator(), false).count();
+            long keyedSize = StreamSupport.stream(getRecords().spliterator(), false).count();
             recordSize -= keyedSize;
         }
 
@@ -118,6 +118,11 @@ public final class MultipleInputJoinRecordStateViews {
                 reusedList.add(record);
             }
             return reusedList;
+        }
+
+        @Override
+        Iterable<RowData> getRecords(int inputIndex) throws Exception {
+            return null;
         }
     }
 
@@ -153,22 +158,26 @@ public final class MultipleInputJoinRecordStateViews {
             if (!recordState.contains(uniqueKey)) {
                 recordSize++;
             }
-            ;
         }
 
         @Override
         public void retractRecord(RowData record) throws Exception {
             RowData uniqueKey = uniqueKeySelector.getKey(record);
-            recordState.remove(uniqueKey);
             if (recordState.contains(uniqueKey)) {
                 recordSize--;
             }
             ;
+            recordState.remove(uniqueKey);
         }
 
         @Override
         public Iterable<RowData> getRecords() throws Exception {
             return recordState.values();
+        }
+
+        @Override
+        Iterable<RowData> getRecords(int inputIndex) throws Exception {
+            return null;
         }
     }
 
@@ -249,6 +258,11 @@ public final class MultipleInputJoinRecordStateViews {
                     return this;
                 }
             };
+        }
+
+        @Override
+        Iterable<RowData> getRecords(int inputIndex) throws Exception {
+            return null;
         }
     }
 }

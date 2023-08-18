@@ -99,28 +99,64 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         DEFAULT_PARALLELISM);
         tEnv.executeSql(
                 String.format(
-                        "CREATE TABLE source_table1 (id INT,name STRING) WITH ('connector' = 'datagen','fields.id.min'='1','fields.id.max'='1000');"));
+                        "CREATE TABLE source_table1 (\n"
+                                + "  id INT,\n"
+                                + "  age INT\n"
+                                + ") WITH (\n"
+                                + "  'connector' = 'datagen',\n"
+                                + "  'rows-per-second'='10',\n"
+                                + "  'fields.id.kind'='sequence' ,\n"
+                                + "  'fields.id.start'='1',\n"
+                                + "  'fields.id.end'='100'\n"
+                                + ");"));
         catalog.alterTableStatistics(
                 new ObjectPath(tEnv.getCurrentDatabase(), "source_table1"),
                 new CatalogTableStatistics(100000, 1, 1, 1),
                 false);
         tEnv.executeSql(
                 String.format(
-                        "CREATE TABLE source_table2 (id INT,name STRING) WITH ('connector' = 'datagen','fields.id.min'='1','fields.id.max'='1000');"));
+                        "CREATE TABLE source_table2 (\n"
+                                + "  id INT,\n"
+                                + "  age INT\n"
+                                + ") WITH (\n"
+                                + "  'connector' = 'datagen',\n"
+                                + "  'rows-per-second'='10',\n"
+                                + "  'fields.id.kind'='sequence' ,\n"
+                                + "  'fields.id.start'='1',\n"
+                                + "  'fields.id.end'='100'\n"
+                                + ");"));
         catalog.alterTableStatistics(
                 new ObjectPath(tEnv.getCurrentDatabase(), "source_table2"),
                 new CatalogTableStatistics(100000, 1, 1, 1),
                 false);
         tEnv.executeSql(
                 String.format(
-                        "CREATE TABLE source_table3 (id INT,name STRING) WITH ('connector' = 'datagen','fields.id.min'='1','fields.id.max'='1000');"));
+                        "CREATE TABLE source_table3 (\n"
+                                + "  id INT,\n"
+                                + "  age INT\n"
+                                + ") WITH (\n"
+                                + "  'connector' = 'datagen',\n"
+                                + "  'rows-per-second'='10',\n"
+                                + "  'fields.id.kind'='sequence' ,\n"
+                                + "  'fields.id.start'='1',\n"
+                                + "  'fields.id.end'='100'\n"
+                                + ");"));
         catalog.alterTableStatistics(
                 new ObjectPath(tEnv.getCurrentDatabase(), "source_table3"),
                 new CatalogTableStatistics(100000, 1, 1, 1),
                 false);
         tEnv.executeSql(
                 String.format(
-                        "CREATE TABLE source_table4 (id INT,name STRING) WITH ('connector' = 'datagen','fields.id.min'='1','fields.id.max'='1000');"));
+                        "CREATE TABLE source_table4 (\n"
+                                + "  id INT,\n"
+                                + "  age INT\n"
+                                + ") WITH (\n"
+                                + "  'connector' = 'datagen',\n"
+                                + "  'rows-per-second'='10',\n"
+                                + "  'fields.id.kind'='sequence' ,\n"
+                                + "  'fields.id.start'='1',\n"
+                                + "  'fields.id.end'='100'\n"
+                                + ");"));
         catalog.alterTableStatistics(
                 new ObjectPath(tEnv.getCurrentDatabase(), "source_table4"),
                 new CatalogTableStatistics(100000, 1, 1, 1),
@@ -218,13 +254,21 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                 .set(
                         OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED,
                         multipleJoinEnable);
+        tEnv.getConfig()
+                .getConfiguration()
+                .set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
         String query =
+                "SELECT * FROM T4 "
+                        + "JOIN T3 ON T4.d4 = T3.c3 "
+                        + "JOIN T2 ON T3.b3 = T2.b2 "
+                        + "JOIN T1 ON T2.a2 = T1.a1";
+        String query1 =
                 "SELECT * FROM T4 "
                         + "JOIN T3 ON T4.b4 = T3.b3 "
                         + "JOIN T2 ON T4.b4 = T2.b2 "
                         + "JOIN T1 ON T4.b4 = T1.b1";
-        System.out.println(tEnv.explainSql(query));
-        tEnv.executeSql(query).print();
+        // System.out.println(tEnv.explainSql(query));
+        tEnv.executeSql(query1).print();
     }
 
     @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")

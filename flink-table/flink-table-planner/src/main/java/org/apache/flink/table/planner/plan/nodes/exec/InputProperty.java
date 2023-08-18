@@ -73,12 +73,16 @@ public class InputProperty {
     public static final String FIELD_NAME_DAM_BEHAVIOR = "damBehavior";
     public static final String FIELD_NAME_PRIORITY = "priority";
 
+    public void setRequiredDistribution(RequiredDistribution requiredDistribution) {
+        this.requiredDistribution = requiredDistribution;
+    }
+
     /**
      * The required input data distribution when the target {@link ExecNode} read data in from the
      * corresponding input.
      */
     @JsonProperty(FIELD_NAME_REQUIRED_DISTRIBUTION)
-    private final RequiredDistribution requiredDistribution;
+    private RequiredDistribution requiredDistribution;
 
     /** How does the input record trigger the output behavior of the target {@link ExecNode}. */
     @JsonProperty(FIELD_NAME_DAM_BEHAVIOR)

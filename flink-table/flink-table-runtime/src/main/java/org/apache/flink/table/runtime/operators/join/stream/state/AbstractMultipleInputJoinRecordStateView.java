@@ -17,6 +17,8 @@
  */
 package org.apache.flink.table.runtime.operators.join.stream.state;
 
+import org.apache.flink.table.data.RowData;
+
 /**
  * Abstract implementation for JoinRecordStateView which defines some member fields can be shared
  * between different implementations.
@@ -28,7 +30,5 @@ public abstract class AbstractMultipleInputJoinRecordStateView implements JoinRe
         return recordSize;
     }
 
-    public void setRecordSize(Long recordSize) {
-        this.recordSize = recordSize;
-    }
+    abstract Iterable<RowData> getRecords(int inputIndex) throws Exception;
 }
