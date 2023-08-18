@@ -83,7 +83,6 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
     private long matchCount = 0;
     private String stateBackend = "fileSystem";
 
-
     final Logger logger = LoggerFactory.getLogger(MultipleInputStreamJoinOperator.class);
 
     public MultipleInputStreamJoinOperator(
@@ -191,7 +190,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                                 new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss z");
                         Date date = new Date(System.currentTimeMillis());
                         long endTime = System.currentTimeMillis();
-                        logger.info("update time:" + (endTime-startTime));
+                        logger.info("update time:" + (endTime - startTime));
                         logger.info("collect false：" + formatter.format(date));
                     }
                 };
@@ -222,7 +221,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
 
     private void printUpdateInfos() {
         logger.info(
-                        "\n"
+                "\n"
                         + "new match rate："
                         + Arrays.deepToString(selectivity.matchRates)
                         + "\n"
@@ -233,14 +232,13 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                         + joinOrders
                         + "\n"
                         + "match time avg："
-                        + matchTime/matchCount
+                        + matchTime / matchCount
                         + "\n"
                         + "query time avg："
-                        + queryTime/queryCount
-                        +"\n"
+                        + queryTime / queryCount
+                        + "\n"
                         + "query cost："
-                        + Arrays.deepToString(selectivity.queryCost)
-        );
+                        + Arrays.deepToString(selectivity.queryCost));
     }
 
     /**
@@ -364,7 +362,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         Iterable<RowData> records = otherSideStateView.getRecords();
         long e1 = System.nanoTime();
         queryCount++;
-        queryTime+=(e1-s1);
+        queryTime += (e1 - s1);
         for (RowData record : records) {
             long s2 = System.nanoTime();
             boolean matched =
@@ -375,7 +373,7 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
             }
             long e2 = System.nanoTime();
             matchCount++;
-            matchTime+=(e2-s2);
+            matchTime += (e2 - s2);
         }
         return associations;
     }
@@ -447,7 +445,10 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
             for (List<Integer> order : allOrders) {
                 double cost =
                         calculateTotalCost(
-                                selectivity.matchRates[i], selectivity.queryCost[i],selectivity.avgOfBeMatched[i], order);
+                                selectivity.matchRates[i],
+                                selectivity.queryCost[i],
+                                selectivity.avgOfBeMatched[i],
+                                order);
                 if (cost < minCost) {
                     minCost = cost;
                     joinOrder = order;
@@ -458,18 +459,25 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
         this.joinOrders = joinOrders;
     }
 
-    public double calculateTotalCost(double[] rate, double[] queryCost, double[] matchCost, List<Integer> indexOrder) {
+    public double calculateTotalCost(
+            double[] rate, double[] queryCost, double[] matchCost, List<Integer> indexOrder) {
         return calculateTotalCostHelper(rate, queryCost, matchCost, indexOrder, 0);
     }
 
     private double calculateTotalCostHelper(
-            double[] rate, double[] queryCost, double[] matchCost, List<Integer> indexOrder, int index) {
+            double[] rate,
+            double[] queryCost,
+            double[] matchCost,
+            List<Integer> indexOrder,
+            int index) {
         if (index == indexOrder.size()) {
             return 0;
         }
         int current = indexOrder.get(index);
-        double subCost = calculateTotalCostHelper(rate, queryCost, matchCost, indexOrder, index + 1);
-        return QUERY_COST_COFFICIENT * queryCost[current] + rate[current] * (MATCH_COST_COFFICIENT * matchCost[current] + subCost);
+        double subCost =
+                calculateTotalCostHelper(rate, queryCost, matchCost, indexOrder, index + 1);
+        return QUERY_COST_COFFICIENT * queryCost[current]
+                + rate[current] * (MATCH_COST_COFFICIENT * matchCost[current] + subCost);
     }
 
     public static List<List<Integer>> permute(List<Integer> nums) {
@@ -536,13 +544,13 @@ public class MultipleInputStreamJoinOperator extends AbstractStreamOperatorV2<Ro
                         avgOfBeMatched[i][j] =
                                 (double) sumOfBeMatched[i][j] / (double) countOfBeMatched[i][j];
                     }
-
                 }
             }
-            if(stateBackend.equals("rocksdb")){
+            if (stateBackend.equals("rocksdb")) {
                 for (int i = 0; i < numberOfInputs; i++) {
                     for (int j = 0; j < numberOfInputs; j++) {
-                        double queryCostRocksdb  = Math.log(recordStateViews.get(j).getRecordSize())/ Math.log(2);
+                        double queryCostRocksdb =
+                                Math.log(recordStateViews.get(j).getRecordSize()) / Math.log(2);
                         queryCost[i][j] = queryCostRocksdb;
                     }
                 }

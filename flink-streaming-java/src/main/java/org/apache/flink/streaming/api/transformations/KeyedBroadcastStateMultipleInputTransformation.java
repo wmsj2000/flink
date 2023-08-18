@@ -21,36 +21,46 @@ package org.apache.flink.streaming.api.transformations;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.dag.Transformation;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * {@link KeyedMultipleInputTransformation} extend for keyed streams join.
+ * {@link AbstractMultipleInputTransformation} implementation for keyed broadcast streams.
  *
  * @author Quentin Qiu
  */
 @Internal
-public class MultipleInputJoinTransformation<OUT> extends KeyedMultipleInputTransformation<OUT> {
-    public MultipleInputJoinTransformation(
+public class KeyedBroadcastStateMultipleInputTransformation<OUT>
+        extends AbstractMultipleInputTransformation<OUT> {
+    private final List<KeySelector<?, ?>> stateKeySelectors = new ArrayList<>();
+    protected final TypeInformation<?> stateKeyType;
+
+    public KeyedBroadcastStateMultipleInputTransformation(
             String name,
             StreamOperatorFactory<OUT> operatorFactory,
             TypeInformation<OUT> outputType,
             int parallelism,
             TypeInformation<?> stateKeyType) {
-        super(name, operatorFactory, outputType, parallelism, stateKeyType);
+        super(name, operatorFactory, outputType, parallelism);
+        this.stateKeyType = stateKeyType;
+        updateManagedMemoryStateBackendUseCase(true);
     }
 
-    public MultipleInputJoinTransformation(
-            String name,
-            StreamOperatorFactory<OUT> operatorFactory,
-            TypeInformation<OUT> outputType,
-            int parallelism,
-            boolean parallelismConfigured,
-            TypeInformation<?> stateKeyType) {
-        super(name, operatorFactory, outputType, parallelism, parallelismConfigured, stateKeyType);
-    }
-
-    public MultipleInputJoinTransformation<OUT> addInput(Transformation<?> input) {
+    public KeyedBroadcastStateMultipleInputTransformation<OUT> addInput(
+            Transformation<?> input, KeySelector<?, ?> keySelector) {
         inputs.add(input);
+        getStateKeySelectors().add(keySelector);
         return this;
+    }
+
+    public TypeInformation<?> getStateKeyType() {
+        return stateKeyType;
+    }
+
+    public List<KeySelector<?, ?>> getStateKeySelectors() {
+        return stateKeySelectors;
     }
 }

@@ -380,6 +380,20 @@ public class ExecNodeUtil {
         return sb.toString();
     }
 
+    /** Return description for multiple input join node. */
+    public static String getMultipleInputJoinDescription(
+            ExecNode<?> rootNode,
+            List<ExecNode<?>> inputNodes,
+            List<InputProperty> inputProperties) {
+        String members =
+                ExecNodePlanDumper.treeToString(rootNode, inputNodes, true).replace("\n", "\\n");
+        StringBuilder sb = new StringBuilder();
+        sb.append("MultipleInputJoin(");
+        sb.append("members=[\\n").append(members).append("]");
+        sb.append(")");
+        return sb.toString();
+    }
+
     /**
      * The planner might have more information than expressed in legacy source transformations. This
      * enforces planner information about boundedness to the affected transformations.

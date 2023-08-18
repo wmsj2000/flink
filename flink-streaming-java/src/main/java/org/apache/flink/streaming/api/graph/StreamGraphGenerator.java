@@ -54,6 +54,7 @@ import org.apache.flink.streaming.api.transformations.BroadcastStateTransformati
 import org.apache.flink.streaming.api.transformations.CacheTransformation;
 import org.apache.flink.streaming.api.transformations.CoFeedbackTransformation;
 import org.apache.flink.streaming.api.transformations.FeedbackTransformation;
+import org.apache.flink.streaming.api.transformations.KeyedBroadcastStateMultipleInputTransformation;
 import org.apache.flink.streaming.api.transformations.KeyedBroadcastStateTransformation;
 import org.apache.flink.streaming.api.transformations.KeyedMultipleInputTransformation;
 import org.apache.flink.streaming.api.transformations.LegacySinkTransformation;
@@ -197,6 +198,9 @@ public class StreamGraphGenerator {
         tmp.put(MultipleInputTransformation.class, new MultiInputTransformationTranslator<>());
         tmp.put(KeyedMultipleInputTransformation.class, new MultiInputTransformationTranslator<>());
         tmp.put(MultipleInputJoinTransformation.class, new MultiInputTransformationTranslator<>());
+        tmp.put(
+                KeyedBroadcastStateMultipleInputTransformation.class,
+                new MultiInputTransformationTranslator<>());
         tmp.put(SourceTransformation.class, new SourceTransformationTranslator<>());
         tmp.put(SinkTransformation.class, new SinkTransformationTranslator<>());
         tmp.put(LegacySinkTransformation.class, new LegacySinkTransformationTranslator<>());

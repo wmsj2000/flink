@@ -286,6 +286,12 @@ public abstract class AbstractKeyedStateBackend<K>
     }
 
     /** @see KeyedStateBackend */
+    public boolean inCurrentKeyGroup(K key) {
+        int groupIndex = KeyGroupRangeAssignment.assignToKeyGroup(key, numberOfKeyGroups);
+        return keyGroupRange.contains(groupIndex);
+    }
+
+    /** @see KeyedStateBackend */
     public int getNumberOfKeyGroups() {
         return numberOfKeyGroups;
     }

@@ -28,6 +28,7 @@ import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.streaming.api.graph.TransformationTranslator;
 import org.apache.flink.streaming.api.transformations.AbstractMultipleInputTransformation;
+import org.apache.flink.streaming.api.transformations.KeyedBroadcastStateMultipleInputTransformation;
 import org.apache.flink.streaming.api.transformations.KeyedMultipleInputTransformation;
 import org.apache.flink.streaming.api.transformations.MultipleInputTransformation;
 import org.apache.flink.streaming.runtime.io.MultipleInputSelectionHandler;
@@ -124,6 +125,16 @@ public class MultiInputTransformationTranslator<OUT>
                     keyedTransform.getStateKeyType().createSerializer(executionConfig);
             streamGraph.setMultipleInputStateKey(
                     transformationId, keyedTransform.getStateKeySelectors(), keySerializer);
+        }
+        if (transformation instanceof KeyedBroadcastStateMultipleInputTransformation) {
+            KeyedBroadcastStateMultipleInputTransformation<OUT> keyedBroadcastTransform =
+                    (KeyedBroadcastStateMultipleInputTransformation<OUT>) transformation;
+            TypeSerializer<?> keySerializer =
+                    keyedBroadcastTransform.getStateKeyType().createSerializer(executionConfig);
+            streamGraph.setMultipleInputStateKey(
+                    transformationId,
+                    keyedBroadcastTransform.getStateKeySelectors(),
+                    keySerializer);
         }
 
         for (int i = 0; i < inputTransformations.size(); i++) {

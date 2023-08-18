@@ -28,7 +28,7 @@ import org.apache.flink.table.planner.plan.utils.IntervalJoinUtil.satisfyInterva
 import org.apache.flink.table.planner.plan.utils.TemporalJoinUtil.satisfyTemporalJoin
 import org.apache.flink.table.planner.plan.utils.WindowJoinUtil.satisfyWindowJoin
 import org.apache.flink.table.runtime.generated.GeneratedJoinCondition
-import org.apache.flink.table.runtime.operators.join.stream.state.JoinInputSideSpec
+import org.apache.flink.table.runtime.operators.join.stream.state.{JoinInputSideSpec, MultipleInputJoinInputSideSpec}
 import org.apache.flink.table.runtime.types.PlannerTypeUtils
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo
 import org.apache.flink.table.types.logical.{LogicalType, RowType}
@@ -188,7 +188,6 @@ object JoinUtil {
       }
     }
   }
-
   private def getSmallestKey(keys: util.List[Array[Int]]) = {
     keys.reduce((k1, k2) => if (k1.length <= k2.length) k1 else k2)
   }

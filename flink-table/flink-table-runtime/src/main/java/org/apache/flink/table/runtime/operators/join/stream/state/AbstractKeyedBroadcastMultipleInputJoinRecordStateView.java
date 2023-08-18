@@ -15,14 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.flink.table.runtime.operators.join.stream.state;
 
-package org.apache.flink.table.runtime.operators.join.multiway;
+import org.apache.flink.table.data.RowData;
 
 /**
- * join graph.
- *
- * @author Quentin Qiu
+ * Abstract implementation for JoinRecordStateView which defines some member fields can be shared
+ * between different implementations.
  */
-public class JoinGraph {
-    public JoinGraph() {}
+public abstract class AbstractKeyedBroadcastMultipleInputJoinRecordStateView
+        implements JoinRecordStateView {
+    protected Long recordSize = 0L;
+
+    public Long getRecordSize() {
+        return recordSize;
+    }
+
+    public abstract Iterable<RowData> getRecords(RowData record, int inputIndex) throws Exception;
 }
