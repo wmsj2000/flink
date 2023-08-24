@@ -126,7 +126,11 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
         for (ExecEdge inputEdge : reorderedInputEdges) {
             inputTransforms.add(inputEdge.translateToPlan(planner));
         }
+<<<<<<< HEAD
         //final Transformation<?> outputTransform = rootNode.translateToPlan(planner);
+=======
+        final Transformation<?> outputTransform = rootNode.translateToPlan(planner);
+>>>>>>> origin/master
         // set selectors for state
         List<RowDataKeySelector> selectors = new ArrayList<>();
         for (int i = 0; i < originalEdges.size(); i++) {
@@ -154,7 +158,11 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
             multipleInputJoinTransform.addInput(inputTransforms.get(i), selector);
         }
         multipleInputJoinTransform.setDescription(createTransformationDescription(config));
+<<<<<<< HEAD
         //setMultipleInputJoinTransform(multipleInputJoinTransform, inputTransforms, outputTransform);
+=======
+        setMultipleInputJoinTransform(multipleInputJoinTransform, inputTransforms, outputTransform);
+>>>>>>> origin/master
         return multipleInputJoinTransform;
     }
 
