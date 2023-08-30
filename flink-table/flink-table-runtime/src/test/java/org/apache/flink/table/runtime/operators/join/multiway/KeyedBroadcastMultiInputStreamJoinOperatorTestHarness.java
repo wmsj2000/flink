@@ -65,6 +65,7 @@ public class KeyedBroadcastMultiInputStreamJoinOperatorTestHarness<KEY, OUT>
     private MultipleInputStreamOperator<OUT> getCastedOperator() {
         return (MultipleInputStreamOperator<OUT>) operator;
     }
+
     public void processElement(int idx, StreamRecord<?> element) throws Exception {
         Input input = getCastedOperator().getInputs().get(idx);
         input.setKeyContextElement(element);

@@ -176,16 +176,20 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
                 dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);
         for (List<RowData> associated : associatedLists) {
             if (!associated.contains(null)) {
-                List<RowData> projectedAssociated = projectAssociated(associated,inputSideSpecs);
-                collector.collect((new MultipleInputJoinedRowData(RowKind.INSERT, projectedAssociated)));
+                List<RowData> projectedAssociated = projectAssociated(associated, inputSideSpecs);
+                collector.collect(
+                        (new MultipleInputJoinedRowData(RowKind.INSERT, projectedAssociated)));
             }
         }
     }
 
-    private List<RowData> projectAssociated(List<RowData> associated, List<MultipleInputJoinInputSideSpec> inputSideSpecs) throws Exception {
+    private List<RowData> projectAssociated(
+            List<RowData> associated, List<MultipleInputJoinInputSideSpec> inputSideSpecs)
+            throws Exception {
         List<RowData> projectedAssociated = new ArrayList<>();
         for (int i = 0; i < numberOfInputs; i++) {
-            RowData projectedData = inputSideSpecs.get(i).getOutputSelector().getKey(associated.get(i));
+            RowData projectedData =
+                    inputSideSpecs.get(i).getOutputSelector().getKey(associated.get(i));
             projectedAssociated.add(projectedData);
         }
         return projectedAssociated;

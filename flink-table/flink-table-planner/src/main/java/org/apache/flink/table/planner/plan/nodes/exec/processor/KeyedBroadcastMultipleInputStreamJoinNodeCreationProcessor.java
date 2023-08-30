@@ -45,7 +45,8 @@ import java.util.Queue;
  *
  * @author Quentin Qiu
  */
-public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor implements ExecNodeGraphProcessor {
+public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor
+        implements ExecNodeGraphProcessor {
 
     public KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor() {}
 
@@ -146,12 +147,13 @@ public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor implemen
     }
 
     private boolean canBeMultipleInputJoinNodeMember(ExecNodeWrapper wrapper) {
-        if(wrapper.execNode instanceof CommonExecExchange || wrapper.execNode instanceof StreamExecJoin){
+        if (wrapper.execNode instanceof CommonExecExchange
+                || wrapper.execNode instanceof StreamExecJoin) {
             return true;
         }
-        if(wrapper.execNode instanceof StreamExecCalc
+        if (wrapper.execNode instanceof StreamExecCalc
                 && wrapper.execNode.getInputEdges().get(0).getSource() instanceof StreamExecJoin
-                && ((StreamExecCalc) wrapper.execNode).getCondition()==null){
+                && ((StreamExecCalc) wrapper.execNode).getCondition() == null) {
             return true;
         }
         return false;

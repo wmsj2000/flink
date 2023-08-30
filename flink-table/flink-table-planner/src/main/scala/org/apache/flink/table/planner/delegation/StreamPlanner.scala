@@ -46,6 +46,7 @@ import org.apache.calcite.sql.SqlExplainLevel
 
 import java.io.{File, IOException}
 import java.util
+
 import scala.collection.mutable
 
 class StreamPlanner(
@@ -85,7 +86,7 @@ class StreamPlanner(
     // multiple input join creation, OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED default true.
     if (getTableConfig.get(OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED)) {
       processors.add(new KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor())
-      //processors.add(new MultipleInputStreamJoinNodeCreationProcessor())
+      // processors.add(new MultipleInputStreamJoinNodeCreationProcessor())
     }
     processors
   }
