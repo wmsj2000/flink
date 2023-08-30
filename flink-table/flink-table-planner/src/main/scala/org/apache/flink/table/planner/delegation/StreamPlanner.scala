@@ -32,7 +32,7 @@ import org.apache.flink.table.operations.{ModifyOperation, Operation}
 import org.apache.flink.table.planner.plan.`trait`._
 import org.apache.flink.table.planner.plan.ExecNodeGraphInternalPlan
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeGraph
-import org.apache.flink.table.planner.plan.nodes.exec.processor.{ExecNodeGraphProcessor, MultipleInputStreamJoinNodeCreationProcessor}
+import org.apache.flink.table.planner.plan.nodes.exec.processor.{ExecNodeGraphProcessor, KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor, MultipleInputStreamJoinNodeCreationProcessor}
 import org.apache.flink.table.planner.plan.nodes.exec.serde.JsonSerdeUtil
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecNode
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodePlanDumper
@@ -46,7 +46,6 @@ import org.apache.calcite.sql.SqlExplainLevel
 
 import java.io.{File, IOException}
 import java.util
-
 import scala.collection.mutable
 
 class StreamPlanner(
@@ -85,10 +84,8 @@ class StreamPlanner(
 
     // multiple input join creation, OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED default true.
     if (getTableConfig.get(OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED)) {
-      /*
-    processors.add(new StreamMultipleInputJoinNodeCreationProcessor(true))
-       */
-      processors.add(new MultipleInputStreamJoinNodeCreationProcessor())
+      processors.add(new KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor())
+      //processors.add(new MultipleInputStreamJoinNodeCreationProcessor())
     }
     processors
   }

@@ -18,6 +18,9 @@
 
 package org.apache.flink.table.planner.plan.nodes.exec.stream;
 
+import org.apache.calcite.rex.RexInputRef;
+import org.apache.calcite.rex.RexNode;
+
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.streaming.api.operators.ChainingStrategy;
@@ -31,10 +34,12 @@ import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeBase;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeConfig;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeContext;
 import org.apache.flink.table.planner.plan.nodes.exec.InputProperty;
+import org.apache.flink.table.planner.plan.nodes.exec.common.CommonExecCalc;
 import org.apache.flink.table.planner.plan.nodes.exec.spec.JoinSpec;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.planner.plan.utils.JoinUtil;
 import org.apache.flink.table.planner.plan.utils.KeySelectorUtil;
+import org.apache.flink.table.planner.utils.JavaScalaConversionUtil;
 import org.apache.flink.table.runtime.generated.GeneratedJoinCondition;
 import org.apache.flink.table.runtime.keyselector.RowDataKeySelector;
 import org.apache.flink.table.runtime.operators.join.multiway.KeyedBroadcastMultipleInputStreamJoinOperatorFactory;
@@ -46,6 +51,10 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import org.apache.commons.lang3.tuple.Pair;
+
+import scala.collection.Seq;
+import scala.collection.convert.Wrappers;
+import scala.collection.mutable.ArrayBuffer;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -104,6 +113,7 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
         MultipleInputJoinEdge[][] multipleInputJoinEdges =
                 getMultipleInputJoinEdges(
                         planner, config, upsertKeyLists, internalTypeInfos, rowTypes);
+        List<RowDataKeySelector> outputSelectors = getInputSelectorsForOutput(planner,internalTypeInfos);
         List<MultipleInputJoinInputSideSpec> multipleInputJoinInputSideSpecs = new ArrayList<>();
         for (int i = 0; i < originalEdges.size(); i++) {
             boolean isBroadcastSide = i > 1;
@@ -115,6 +125,7 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
                             isBroadcastSide,
                             internalTypeInfos.get(i),
                             i,
+                            outputSelectors.get(i),
                             joinKeysAndSelectorsPair.getLeft(),
                             joinKeysAndSelectorsPair.getRight());
             multipleInputJoinInputSideSpec.analyzeMultipleInputJoinInput(multipleInputJoinEdges);
@@ -126,7 +137,7 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
         for (ExecEdge inputEdge : reorderedInputEdges) {
             inputTransforms.add(inputEdge.translateToPlan(planner));
         }
-        //final Transformation<?> outputTransform = rootNode.translateToPlan(planner);
+        // final Transformation<?> outputTransform = rootNode.translateToPlan(planner);
         // set selectors for state
         List<RowDataKeySelector> selectors = new ArrayList<>();
         for (int i = 0; i < originalEdges.size(); i++) {
@@ -154,7 +165,8 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
             multipleInputJoinTransform.addInput(inputTransforms.get(i), selector);
         }
         multipleInputJoinTransform.setDescription(createTransformationDescription(config));
-        //setMultipleInputJoinTransform(multipleInputJoinTransform, inputTransforms, outputTransform);
+        // setMultipleInputJoinTransform(multipleInputJoinTransform, inputTransforms,
+        // outputTransform);
         return multipleInputJoinTransform;
     }
 
@@ -179,18 +191,18 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
             inputNodes.add(edge.getSource());
         }
         List<ExecEdge> sortedEdges = new ArrayList<>();
-        dfs(rootNode, sortedEdges, inputNodes);
+        dfsSort(rootNode, sortedEdges, inputNodes);
         return sortedEdges;
     }
 
-    private void dfs(
+    private void dfsSort(
             ExecNode<?> rootNode, List<ExecEdge> sortedEdges, List<ExecNode<?>> inputNodes) {
         if (inputNodes.contains(rootNode)) {
             return;
         }
         for (ExecEdge edge : rootNode.getInputEdges()) {
             ExecNode<?> node = edge.getSource();
-            dfs(node, sortedEdges, inputNodes);
+            dfsSort(node, sortedEdges, inputNodes);
             if (originalEdges.contains(edge)) {
                 sortedEdges.add(edge);
             }
@@ -262,52 +274,6 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
         multipleInputJoinTransform.setChainingStrategy(ChainingStrategy.HEAD_WITH_SOURCES);
     }
 
-    private <T> List<T> reorderList(List<T> oldList, List<Integer> newIndexList) {
-        List<T> newList = new ArrayList<>(Collections.nCopies(oldList.size(), null));
-        for (int i = 0; i < newIndexList.size(); i++) {
-            newList.set(newIndexList.get(i), oldList.get(i));
-        }
-        return newList;
-    }
-
-    private List<Integer> getInputIndexOfOutput(List<RowType> rowTypes, RowType outputType) {
-        List<List<LogicalType>> inputRowTypes = new ArrayList<>();
-        for (RowType rowType : rowTypes) {
-            List<LogicalType> inputRowType = new ArrayList<>();
-            for (RowType.RowField field : rowType.getFields()) {
-                inputRowType.add(field.getType());
-            }
-            inputRowTypes.add(inputRowType);
-        }
-        int[] visited = new int[inputRowTypes.size()];
-        List<Integer> indexes = new ArrayList<>();
-        List<LogicalType> outputRowType = new ArrayList<>();
-        for (RowType.RowField field : outputType.getFields()) {
-            outputRowType.add(field.getType());
-        }
-        int current = 0;
-        while (current < outputRowType.size()) {
-            int skip = 1;
-            for (int i = 0; i < inputRowTypes.size(); i++) {
-                if (visited[i] != 1
-                        && outputRowType
-                                .subList(current, current + inputRowTypes.get(i).size())
-                                .equals(inputRowTypes.get(i))) {
-                    visited[i] = 1;
-                    skip = inputRowTypes.get(i).size();
-                    indexes.add(i);
-                    break;
-                }
-            }
-            current += skip;
-        }
-        List<Integer> newIndexes = new ArrayList<>();
-        for (int i = 0; i < indexes.size(); i++) {
-            newIndexes.add(indexes.indexOf(i));
-        }
-        return newIndexes;
-    }
-
     private MultipleInputJoinEdge[][] getMultipleInputJoinEdges(
             PlannerBase planner,
             ExecNodeConfig config,
@@ -325,9 +291,9 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
             int[] leftKeys = ((StreamExecJoin) node).getJoinSpec().getLeftKeys();
             int[] rightKeys = ((StreamExecJoin) node).getJoinSpec().getRightKeys();
             Pair<Integer, int[]> leftInputJoinKeyPair =
-                    getJoinInputIndex(node.getInputEdges().get(0), leftKeys);
+                    getJoinInputIndexWithCal(node.getInputEdges().get(0), leftKeys);
             Pair<Integer, int[]> rightInpuJoinKeytPair =
-                    getJoinInputIndex(node.getInputEdges().get(1), rightKeys);
+                    getJoinInputIndexWithCal(node.getInputEdges().get(1), rightKeys);
             assert leftInputJoinKeyPair != null;
             assert rightInpuJoinKeytPair != null;
             int inputIndex1 = leftInputJoinKeyPair.getLeft();
@@ -404,6 +370,92 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
                             ((StreamExecJoin) node).getJoinSpec().getFilterNulls());
         }
         return joinEdges;
+    }
+
+    private Pair<Integer, int[]> getJoinInputIndexWithCal(ExecEdge execEdge, int[] keyIndexs) {
+        if (originalEdges.contains(execEdge)) {
+            int inputIndex = originalEdges.indexOf(execEdge);
+            return Pair.of(inputIndex, keyIndexs);
+        }
+        if (execEdge.getSource() instanceof StreamExecExchange) {
+            execEdge = execEdge.getSource().getInputEdges().get(0);
+        }
+        if (execEdge.getSource() instanceof StreamExecCalc) {
+            execEdge = execEdge.getSource().getInputEdges().get(0);
+            checkArgument(execEdge.getSource() instanceof StreamExecJoin);
+            StreamExecCalc calNode = (StreamExecCalc)execEdge.getTarget();
+            List<RexNode> projection= calNode.getProjection();
+            List<Integer> indexs = new ArrayList<>();
+            for (Object obj : projection) {
+                RexInputRef ref = (RexInputRef)obj;
+                indexs.add(ref.getIndex());
+            }
+            for (int i = 0; i < keyIndexs.length; i++) {
+                keyIndexs[i] = indexs.get(keyIndexs[i]);
+            }
+        }
+        if (execEdge.getSource() instanceof StreamExecJoin) {
+            ExecEdge preLeftEdge = execEdge.getSource().getInputEdges().get(0);
+            ExecEdge preRightEdge = execEdge.getSource().getInputEdges().get(1);
+            RowType preLeftOutputType = (RowType) preLeftEdge.getOutputType();
+            RowType preRightOutputType = (RowType) preRightEdge.getOutputType();
+            int leftSize = preLeftOutputType.getFields().size();
+            int rightSize = preRightOutputType.getFields().size();
+            if (allLessThan(keyIndexs, 0) || allMoreThan(keyIndexs, leftSize + rightSize)) {
+                throw new RuntimeException("join key out of bound");
+            }
+            boolean keysInLeft = allLessThan(keyIndexs, leftSize);
+            boolean keysInRight = allMoreThan(keyIndexs, leftSize);
+            if (!(keysInLeft || keysInRight)) {
+                throw new RuntimeException("join keys should come from single input");
+            }
+            if (keysInLeft) {
+                return getJoinInputIndexWithCal(preLeftEdge, keyIndexs);
+            } else {
+                int[] newIndexs = minus(keyIndexs, leftSize);
+                return getJoinInputIndexWithCal(preRightEdge, newIndexs);
+            }
+        } else {
+            throw new RuntimeException("mj group only contains exchange or join or cal");
+        }
+    }
+
+    private List<RowDataKeySelector> getInputSelectorsForOutput(PlannerBase planner,List<InternalTypeInfo<RowData>> internalTypeInfos){
+        checkArgument(rootNode instanceof StreamExecJoin);
+        ExecEdge preLeftEdge = rootNode.getInputEdges().get(0);
+        ExecEdge preRightEdge =rootNode.getInputEdges().get(1);
+        RowType preLeftOutputType = (RowType) preLeftEdge.getOutputType();
+        RowType preRightOutputType = (RowType) preRightEdge.getOutputType();
+        int leftSize = preLeftOutputType.getFields().size();
+        int rightSize = preRightOutputType.getFields().size();
+        RowType rowType = (RowType)rootNode.getOutputType();
+        InternalTypeInfo<RowData> internalTypeInfo = InternalTypeInfo.of(rowType);
+        List<List<Integer>> inputKeyIndexlists = new ArrayList<>();
+        for (int i = 0; i < originalEdges.size(); i++) {
+            inputKeyIndexlists.add(new ArrayList<>());
+        }
+        for (int i = 0; i < leftSize+rightSize; i++) {
+            Pair<Integer, int[]> pair;
+            if (i<leftSize) {
+                pair = getJoinInputIndexWithCal(preLeftEdge, new int[]{i});
+            } else {
+                pair = getJoinInputIndexWithCal(preRightEdge, new int[]{i-leftSize});
+            }
+            int inputIndex = pair.getLeft();
+            int[] keyIndex = pair.getRight();
+            inputKeyIndexlists.get(inputIndex).add(keyIndex[0]);
+        }
+        List<RowDataKeySelector> selectors = new ArrayList<>();
+        for (int i = 0; i < inputKeyIndexlists.size(); i++) {
+            List<Integer> inputKeyIndexlist = inputKeyIndexlists.get(i);
+            RowDataKeySelector joinKeySelector =
+                    KeySelectorUtil.getRowDataSelector(
+                            planner.getFlinkContext().getClassLoader(),
+                            inputKeyIndexlist.stream().mapToInt(Integer::valueOf).toArray(),
+                            internalTypeInfos.get(i));
+            selectors.add(joinKeySelector);
+        }
+        return selectors;
     }
 
     private Pair<Integer, int[]> getJoinInputIndex(ExecEdge execEdge, int[] keyIndexs) {

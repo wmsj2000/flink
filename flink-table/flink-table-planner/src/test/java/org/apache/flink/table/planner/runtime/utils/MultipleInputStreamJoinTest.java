@@ -20,7 +20,6 @@ package org.apache.flink.table.planner.runtime.utils;
 
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
@@ -390,13 +389,11 @@ public class MultipleInputStreamJoinTest extends TestLogger {
 
     @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
     @ValueSource(booleans = {true})
-    public void testQ2mj(boolean multipleJoinEnable){
+    public void testQ2mj(boolean multipleJoinEnable) {
         tEnv.getConfig()
                 .getConfiguration()
-                .set(
-                        OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED,
-                        true);
-
+                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED, true);
+        createTables(tEnv);
         // 获取注册的配置
         ExecutionConfig.GlobalJobParameters parameters = env.getConfig().getGlobalJobParameters();
         Map<String, String> map = parameters.toMap();
@@ -404,270 +401,167 @@ public class MultipleInputStreamJoinTest extends TestLogger {
         tEnv.getConfig().setIdleStateRetention(Duration.ofHours(24));
         Configuration configuration = tEnv.getConfig().getConfiguration();
         configuration.setString("pipeline.name", "Q2mj");
-        //建表
-        tEnv.executeSql("CREATE TABLE nation (\n" +
-                "    n_nationkey INT,\n" +
-                "    n_name CHAR(25),\n" +
-                "    n_regionkey INT\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.n_nationkey.kind'='sequence' ,\n"
-                + "  'fields.n_nationkey.start'='1',\n"
-                + "  'fields.n_nationkey.end'='1000',\n"
-                + "  'fields.n_regionkey.kind'='sequence',\n"
-                + "  'fields.n_regionkey.start'='1',\n"
-                + "  'fields.n_regionkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE part (\n" +
-                "    p_partkey INT,\n" +
-                "    p_name VARCHAR(55),\n" +
-                "    p_mfgr CHAR(25)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.p_partkey.kind'='sequence' ,\n"
-                + "  'fields.p_partkey.start'='1',\n"
-                + "  'fields.p_partkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE partsupp (\n" +
-                "    ps_partkey INT,\n" +
-                "    ps_suppkey INT\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.ps_partkey.kind'='sequence',\n"
-                + "  'fields.ps_partkey.start'='1',\n"
-                + "  'fields.ps_partkey.end'='1000',\n"
-                + "  'fields.ps_suppkey.kind'='sequence',\n"
-                + "  'fields.ps_suppkey.start'='1',\n"
-                + "  'fields.ps_suppkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE region (\n" +
-                "    r_regionkey INT,\n" +
-                "    r_name CHAR(25),\n" +
-                "    r_comment VARCHAR(152)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.r_regionkey.kind'='sequence' ,\n"
-                + "  'fields.r_regionkey.start'='1',\n"
-                + "  'fields.r_regionkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE supplier (\n" +
-                "    s_suppkey INT,\n" +
-                "    s_name CHAR(25),\n" +
-                "    s_address VARCHAR(40),\n" +
-                "    s_nationkey INT\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.s_suppkey.kind'='sequence' ,\n"
-                + "  'fields.s_suppkey.start'='1',\n"
-                + "  'fields.s_suppkey.end'='1000',\n"
-                + "  'fields.s_nationkey.kind'='sequence' ,\n"
-                + "  'fields.s_nationkey.start'='1',\n"
-                + "  'fields.s_nationkey.end'='1000'\n"
-                + ");");
-        String query = "SELECT * " +
-                "FROM supplier, partsupp, nation, region " +
-                "WHERE supplier.s_suppkey = partsupp.ps_suppkey " +
-                "AND supplier.s_nationkey = nation.n_nationkey " +
-                "AND nation.n_regionkey = region.r_regionkey;";
-        System.out.println(tEnv.explainSql(query));
-        tEnv.executeSql(query).print();
-        //tEnv.executeSql("INSERT INTO sink_table_query " + query);
+
+        String query =
+                "SELECT * "
+                        + "FROM supplier, partsupp, nation, region "
+                        + "WHERE supplier.s_suppkey = partsupp.ps_suppkey "
+                        + "AND supplier.s_nationkey = nation.n_nationkey "
+                        + "AND nation.n_regionkey = region.r_regionkey;";
+        String query1 =
+                "SELECT s_acctbal,s_name,n_name,s_address, s_phone,s_comment \n "
+                        + "FROM supplier, partsupp, nation, region "
+                        + "WHERE supplier.s_suppkey = partsupp.ps_suppkey "
+                        + "AND supplier.s_nationkey = nation.n_nationkey "
+                        + "AND nation.n_regionkey = region.r_regionkey;";
+        System.out.println(tEnv.explainSql(query1));
+        tEnv.executeSql(query1).print();
+        // tEnv.executeSql("INSERT INTO sink_table_query " + query);
 
     }
 
-    public void createTables(TableEnvironment tEnv,String data) {
-        tEnv.executeSql("CREATE TABLE nation (\n" +
-                "    n_nationkey INT,\n" +
-                "    n_name CHAR(25),\n" +
-                "    n_regionkey INT\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.n_nationkey.kind'='sequence' ,\n"
-                + "  'fields.n_nationkey.start'='1',\n"
-                + "  'fields.n_nationkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE part (\n" +
-                "    p_partkey INT,\n" +
-                "    p_name VARCHAR(55),\n" +
-                "    p_mfgr CHAR(25)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.p_partkey.kind'='sequence' ,\n"
-                + "  'fields.p_partkey.start'='1',\n"
-                + "  'fields.p_partkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE partsupp (\n" +
-                "    ps_partkey INT,\n" +
-                "    ps_suppkey INT\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.ps_partkey.kind'='sequence' ,\n"
-                + "  'fields.ps_partkey.start'='1',\n"
-                + "  'fields.ps_partkey.end'='1000',\n"
-                + "  'fields.ps_suppkey.kind'='sequence' ,\n"
-                + "  'fields.ps_suppkey.start'='1',\n"
-                + "  'fields.ps_suppkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE region (\n" +
-                "    r_regionkey INT,\n" +
-                "    r_name CHAR(25),\n" +
-                "    r_comment VARCHAR(152)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.r_regionkey.kind'='sequence' ,\n"
-                + "  'fields.r_regionkey.start'='1',\n"
-                + "  'fields.r_regionkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE supplier (\n" +
-                "    s_suppkey INT,\n" +
-                "    s_name CHAR(25),\n" +
-                "    s_address VARCHAR(40),\n" +
-                "    s_nationkey INT\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.s_suppkey.kind'='sequence' ,\n"
-                + "  'fields.s_suppkey.start'='1',\n"
-                + "  'fields.s_suppkey.end'='1000'\n"
-                + ");");
+    public void createTables(TableEnvironment tEnv) {
+        tEnv.executeSql(
+                "CREATE TABLE customer (\n"
+                        + "    c_custkey INT,\n"
+                        + "    c_name VARCHAR(25),\n"
+                        + "    c_address VARCHAR(40),\n"
+                        + "    c_nationkey INT,\n"
+                        + "    c_phone CHAR(15),\n"
+                        + "    c_acctbal DECIMAL(15,2),\n"
+                        + "    c_mktsegment CHAR(10),\n"
+                        + "    c_comment VARCHAR(117)\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='10',\n"
+                        + "  'fields.c_custkey.kind'='sequence' ,\n"
+                        + "  'fields.c_custkey.start'='1',\n"
+                        + "  'fields.c_custkey.end'='1000'\n"
+                        + ");");
+        tEnv.executeSql(
+                "CREATE TABLE lineitem (\n"
+                        + "    l_orderkey INT,\n"
+                        + "    l_partkey INT,\n"
+                        + "    l_suppkey INT,\n"
+                        + "    l_linenumber INT,\n"
+                        + "    l_quantity DECIMAL(15,2),\n"
+                        + "    l_extendedprice DECIMAL(15,2),\n"
+                        + "    l_discount DECIMAL(15,2),\n"
+                        + "    l_tax DECIMAL(15,2),\n"
+                        + "    l_returnflag CHAR(1),\n"
+                        + "    l_linestatus CHAR(1),\n"
+                        + "    l_shipdate DATE,\n"
+                        + "    l_commitdate DATE,\n"
+                        + "    l_receiptdate DATE,\n"
+                        + "    l_shipinstruct CHAR(25),\n"
+                        + "    l_shipmode CHAR(10),\n"
+                        + "    l_comment VARCHAR(44)\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='10',\n"
+                        + "  'fields.l_orderkey.kind'='sequence' ,\n"
+                        + "  'fields.l_orderkey.start'='1',\n"
+                        + "  'fields.l_orderkey.end'='1000'\n"
+                        + ");");
+        tEnv.executeSql(
+                "CREATE TABLE nation (\n"
+                        + "    n_nationkey INT,\n"
+                        + "    n_name CHAR(25),\n"
+                        + "    n_regionkey INT,\n"
+                        + "    n_comment VARCHAR(152)\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='10',\n"
+                        + "  'fields.n_nationkey.kind'='sequence' ,\n"
+                        + "  'fields.n_nationkey.start'='1',\n"
+                        + "  'fields.n_nationkey.end'='1000',\n"
+                        + "  'fields.n_regionkey.kind'='sequence' ,\n"
+                        + "  'fields.n_regionkey.start'='1',\n"
+                        + "  'fields.n_regionkey.end'='1000'\n"
+                        + ");");
+        tEnv.executeSql(
+                "CREATE TABLE orders (\n"
+                        + "    o_orderkey INT,\n"
+                        + "    o_custkey INT,\n"
+                        + "    o_orderstatus CHAR(1),\n"
+                        + "    o_totalprice DECIMAL(15,2),\n"
+                        + "    o_orderdate DATE,\n"
+                        + "    o_orderpriority CHAR(15),\n"
+                        + "    o_clerk CHAR(15),\n"
+                        + "    o_shippriority INT,\n"
+                        + "    o_comment VARCHAR(79)\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='10',\n"
+                        + "  'fields.o_orderkey.kind'='sequence' ,\n"
+                        + "  'fields.o_orderkey.start'='1',\n"
+                        + "  'fields.o_orderkey.end'='1000'\n"
+                        + ");");
+        tEnv.executeSql(
+                "CREATE TABLE part (\n"
+                        + "    p_partkey INT,\n"
+                        + "    p_name VARCHAR(55),\n"
+                        + "    p_mfgr CHAR(25),\n"
+                        + "    p_brand CHAR(10),\n"
+                        + "    p_type VARCHAR(25),\n"
+                        + "    p_size INT,\n"
+                        + "    p_container CHAR(10),\n"
+                        + "    p_retailprice DECIMAL(15,2),\n"
+                        + "    p_comment VARCHAR(23)\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='10',\n"
+                        + "  'fields.p_partkey.kind'='sequence' ,\n"
+                        + "  'fields.p_partkey.start'='1',\n"
+                        + "  'fields.p_partkey.end'='1000'\n"
+                        + ");");
+        tEnv.executeSql(
+                "CREATE TABLE partsupp (\n"
+                        + "    ps_partkey INT,\n"
+                        + "    ps_suppkey INT,\n"
+                        + "    ps_availqty INT,\n"
+                        + "    ps_supplycost DECIMAL(15,2),\n"
+                        + "    ps_comment VARCHAR(199)\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='10',\n"
+                        + "  'fields.ps_partkey.kind'='sequence' ,\n"
+                        + "  'fields.ps_partkey.start'='1',\n"
+                        + "  'fields.ps_partkey.end'='1000',\n"
+                        + "  'fields.ps_suppkey.kind'='sequence' ,\n"
+                        + "  'fields.ps_suppkey.start'='1',\n"
+                        + "  'fields.ps_suppkey.end'='1000'\n"
+                        + ");");
+        tEnv.executeSql(
+                "CREATE TABLE region (\n"
+                        + "    r_regionkey INT,\n"
+                        + "    r_name CHAR(25),\n"
+                        + "    r_comment VARCHAR(152)\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='10',\n"
+                        + "  'fields.r_regionkey.kind'='sequence' ,\n"
+                        + "  'fields.r_regionkey.start'='1',\n"
+                        + "  'fields.r_regionkey.end'='1000'\n"
+                        + ");");
+        tEnv.executeSql(
+                "CREATE TABLE supplier (\n"
+                        + "    s_suppkey INT,\n"
+                        + "    s_name CHAR(25),\n"
+                        + "    s_address VARCHAR(40),\n"
+                        + "    s_nationkey INT,\n"
+                        + "    s_phone CHAR(15),\n"
+                        + "    s_acctbal DECIMAL(15,2),\n"
+                        + "    s_comment VARCHAR(101)\n"
+                        + ") WITH (\n"
+                        + "  'connector' = 'datagen',\n"
+                        + "  'rows-per-second'='10',\n"
+                        + "  'fields.s_suppkey.kind'='sequence' ,\n"
+                        + "  'fields.s_suppkey.start'='1',\n"
+                        + "  'fields.s_suppkey.end'='1000',\n"
+                        + "  'fields.s_nationkey.kind'='sequence' ,\n"
+                        + "  'fields.s_nationkey.start'='1',\n"
+                        + "  'fields.s_nationkey.end'='1000'\n"
+                        + ");");
     }
-
-    public void createTableKafka(TableEnvironment tEnv,String data) {
-        tEnv.executeSql("CREATE TABLE customer (\n" +
-                "    c_custkey INT,\n" +
-                "    c_name VARCHAR(25),\n" +
-                "    c_address VARCHAR(40),\n" +
-                "    c_nationkey INT,\n" +
-                "    c_phone CHAR(15),\n" +
-                "    c_acctbal DECIMAL(15,2),\n" +
-                "    c_mktsegment CHAR(10),\n" +
-                "    c_comment VARCHAR(117)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.c_custkey.kind'='sequence' ,\n"
-                + "  'fields.c_custkey.start'='1',\n"
-                + "  'fields.c_custkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE lineitem (\n" +
-                "    l_orderkey INT,\n" +
-                "    l_partkey INT,\n" +
-                "    l_suppkey INT,\n" +
-                "    l_linenumber INT,\n" +
-                "    l_quantity DECIMAL(15,2),\n" +
-                "    l_extendedprice DECIMAL(15,2),\n" +
-                "    l_discount DECIMAL(15,2),\n" +
-                "    l_tax DECIMAL(15,2),\n" +
-                "    l_returnflag CHAR(1),\n" +
-                "    l_linestatus CHAR(1),\n" +
-                "    l_shipdate DATE,\n" +
-                "    l_commitdate DATE,\n" +
-                "    l_receiptdate DATE,\n" +
-                "    l_shipinstruct CHAR(25),\n" +
-                "    l_shipmode CHAR(10),\n" +
-                "    l_comment VARCHAR(44)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.l_orderkey.kind'='sequence' ,\n"
-                + "  'fields.l_orderkey.start'='1',\n"
-                + "  'fields.l_orderkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE nation (\n" +
-                "    n_nationkey INT,\n" +
-                "    n_name CHAR(25),\n" +
-                "    n_regionkey INT,\n" +
-                "    n_comment VARCHAR(152)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.n_nationkey.kind'='sequence' ,\n"
-                + "  'fields.n_nationkey.start'='1',\n"
-                + "  'fields.n_nationkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE orders (\n" +
-                "    o_orderkey INT,\n" +
-                "    o_custkey INT,\n" +
-                "    o_orderstatus CHAR(1),\n" +
-                "    o_totalprice DECIMAL(15,2),\n" +
-                "    o_orderdate DATE,\n" +
-                "    o_orderpriority CHAR(15),\n" +
-                "    o_clerk CHAR(15),\n" +
-                "    o_shippriority INT,\n" +
-                "    o_comment VARCHAR(79)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.o_orderkey.kind'='sequence' ,\n"
-                + "  'fields.o_orderkey.start'='1',\n"
-                + "  'fields.o_orderkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE part (\n" +
-                "    p_partkey INT,\n" +
-                "    p_name VARCHAR(55),\n" +
-                "    p_mfgr CHAR(25),\n" +
-                "    p_brand CHAR(10),\n" +
-                "    p_type VARCHAR(25),\n" +
-                "    p_size INT,\n" +
-                "    p_container CHAR(10),\n" +
-                "    p_retailprice DECIMAL(15,2),\n" +
-                "    p_comment VARCHAR(23)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.p_partkey.kind'='sequence' ,\n"
-                + "  'fields.p_partkey.start'='1',\n"
-                + "  'fields.p_partkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE partsupp (\n" +
-                "    ps_partkey INT,\n" +
-                "    ps_suppkey INT,\n" +
-                "    ps_availqty INT,\n" +
-                "    ps_supplycost DECIMAL(15,2),\n" +
-                "    ps_comment VARCHAR(199)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.ps_partkey.kind'='sequence' ,\n"
-                + "  'fields.ps_partkey.start'='1',\n"
-                + "  'fields.ps_partkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE region (\n" +
-                "    r_regionkey INT,\n" +
-                "    r_name CHAR(25),\n" +
-                "    r_comment VARCHAR(152)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.r_regionkey.kind'='sequence' ,\n"
-                + "  'fields.r_regionkey.start'='1',\n"
-                + "  'fields.r_regionkey.end'='1000'\n"
-                + ");");
-        tEnv.executeSql("CREATE TABLE supplier (\n" +
-                "    s_suppkey INT,\n" +
-                "    s_name CHAR(25),\n" +
-                "    s_address VARCHAR(40),\n" +
-                "    s_nationkey INT,\n" +
-                "    s_phone CHAR(15),\n" +
-                "    s_acctbal DECIMAL(15,2),\n" +
-                "    s_comment VARCHAR(101)\n" +
-                ") WITH (\n"
-                + "  'connector' = 'datagen',\n"
-                + "  'rows-per-second'='10',\n"
-                + "  'fields.s_suppkey.kind'='sequence' ,\n"
-                + "  'fields.s_suppkey.start'='1',\n"
-                + "  'fields.s_suppkey.end'='1000'\n"
-                + ");");
-    }
-
-
 }

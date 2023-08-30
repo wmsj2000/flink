@@ -20,13 +20,15 @@ package org.apache.flink.table.planner.plan.nodes.exec.processor;
 
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecEdge;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeGraph;
 import org.apache.flink.table.planner.plan.nodes.exec.InputProperty;
 import org.apache.flink.table.planner.plan.nodes.exec.common.CommonExecExchange;
+import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecCalc;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecJoin;
-import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecMultipleInputJoin;
+import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecKeyedBroadcastMultipleInputJoin;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.planner.plan.nodes.exec.visitor.AbstractExecNodeExactlyOnceVisitor;
 import org.apache.flink.util.Preconditions;
@@ -43,8 +45,7 @@ import java.util.Queue;
  *
  * @author Quentin Qiu
  */
-public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor
-        implements ExecNodeGraphProcessor {
+public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor implements ExecNodeGraphProcessor {
 
     public KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor() {}
 
@@ -57,16 +58,11 @@ public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor
         createMultipleInputJoinGroups(orderedWrappers);
         // apply optimizations to remove unnecessary nodes out of multiple input join groups
         optimizeMultipleInputJoinGroups(orderedWrappers);
-
-        // cut keys
-        // cutKeysForHashJoins(orderedWrappers);
-
         // create the real multiple input nodes
         List<ExecNode<?>> newRootNodes =
                 createMultipleInputJoinNodes(context.getPlanner().getTableConfig(), rootWrappers);
         return new ExecNodeGraph(newRootNodes);
     }
-
     // --------------------------------------------------------------------------------
     // Wrapping and Sorting
     // --------------------------------------------------------------------------------
@@ -150,8 +146,15 @@ public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor
     }
 
     private boolean canBeMultipleInputJoinNodeMember(ExecNodeWrapper wrapper) {
-        return wrapper.execNode instanceof CommonExecExchange
-                || wrapper.execNode instanceof StreamExecJoin;
+        if(wrapper.execNode instanceof CommonExecExchange || wrapper.execNode instanceof StreamExecJoin){
+            return true;
+        }
+        if(wrapper.execNode instanceof StreamExecCalc
+                && wrapper.execNode.getInputEdges().get(0).getSource() instanceof StreamExecJoin
+                && ((StreamExecCalc) wrapper.execNode).getCondition()==null){
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -297,10 +300,10 @@ public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor
             }
         }
         // return StreamMultipleInputJoinNode
-        return createStreamMultipleInputJoinNode(tableConfig, group, inputs);
+        return (ExecNode<?>) createStreamMultipleInputJoinNode(tableConfig, group, inputs);
     }
 
-    private StreamExecMultipleInputJoin createStreamMultipleInputJoinNode(
+    private StreamExecKeyedBroadcastMultipleInputJoin<RowData> createStreamMultipleInputJoinNode(
             ReadableConfig tableConfig,
             MultipleInputJoinGroup group,
             List<Tuple3<ExecNode<?>, InputProperty, ExecEdge>> inputs) {
@@ -322,10 +325,10 @@ public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor
         }
         String description =
                 ExecNodeUtil.getMultipleInputJoinDescription(rootNode, inputNodes, inputProperties);
-        StreamExecMultipleInputJoin multipleInputJoin;
+        StreamExecKeyedBroadcastMultipleInputJoin<RowData> multipleInputJoin;
         try {
             multipleInputJoin =
-                    new StreamExecMultipleInputJoin(
+                    new StreamExecKeyedBroadcastMultipleInputJoin<RowData>(
                             tableConfig, inputProperties, rootNode, originalEdges, description);
         } catch (Exception e) {
             throw new RuntimeException(e);

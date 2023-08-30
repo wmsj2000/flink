@@ -46,6 +46,12 @@ public class MultipleInputJoinInputSideSpec implements Serializable {
     private RowDataKeySelector stateKeySelector;
     private final List<RowDataKeySelector> keySelectorList;
     private final InternalTypeInfo<RowData> internalTypeInfo;
+
+    public RowDataKeySelector getOutputSelector() {
+        return outputSelector;
+    }
+
+    private final RowDataKeySelector outputSelector;
     private boolean inputSideHasUniqueKey;
     private boolean joinKeyContainsUniqueKey;
     @Nullable private InternalTypeInfo<RowData> uniqueKeyType;
@@ -55,6 +61,7 @@ public class MultipleInputJoinInputSideSpec implements Serializable {
             boolean inputSideIsBroadcast,
             InternalTypeInfo<RowData> internalTypeInfo,
             int inputIndex,
+            RowDataKeySelector outputSelector,
             List<int[]> joinKeyList,
             List<RowDataKeySelector> selectorList) {
         this.inputSideIsBroadcast = inputSideIsBroadcast;
@@ -62,6 +69,7 @@ public class MultipleInputJoinInputSideSpec implements Serializable {
         this.inputIndex = inputIndex;
         this.joinKeyList = joinKeyList;
         this.keySelectorList = selectorList;
+        this.outputSelector = outputSelector;
         // tmp
         this.inputSideHasUniqueKey = false;
         this.joinKeyContainsUniqueKey = false;

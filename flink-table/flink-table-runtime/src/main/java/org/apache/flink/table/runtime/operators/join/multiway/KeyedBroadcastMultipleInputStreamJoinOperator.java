@@ -176,43 +176,19 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
                 dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);
         for (List<RowData> associated : associatedLists) {
             if (!associated.contains(null)) {
-                collector.collect((new MultipleInputJoinedRowData(RowKind.INSERT, associated)));
+                List<RowData> projectedAssociated = projectAssociated(associated,inputSideSpecs);
+                collector.collect((new MultipleInputJoinedRowData(RowKind.INSERT, projectedAssociated)));
             }
         }
     }
 
-    private void dfsJoin(
-            MultipleInputJoinEdge[][] multipleInputJoinEdges,
-            RowData input,
-            int inputIndex,
-            boolean[] visited,
-            List<RowData> path,
-            int count)
-            throws Exception {
-        if (count == numberOfInputs) {
-            collector.collect((new MultipleInputJoinedRowData(RowKind.INSERT, path)));
-            return;
-        }
+    private List<RowData> projectAssociated(List<RowData> associated, List<MultipleInputJoinInputSideSpec> inputSideSpecs) throws Exception {
+        List<RowData> projectedAssociated = new ArrayList<>();
         for (int i = 0; i < numberOfInputs; i++) {
-            if (multipleInputJoinEdges[inputIndex][i] != null && !visited[i]) {
-                visited[i] = true;
-                List<RowData> leftRecords = new ArrayList<>();
-                leftRecords.add(input);
-                JoinCondition condition = joinConditions[inputIndex][i];
-                AbstractKeyedBroadcastMultipleInputJoinRecordStateView rightState =
-                        recordStateViews.get(i);
-                List<RowData> associatedRecords =
-                        matchRows(leftRecords, inputIndex, rightState, condition);
-                if (associatedRecords.isEmpty()) {
-                    break;
-                }
-                for (RowData associateRecord : associatedRecords) {
-                    path.set(i, associateRecord);
-                    count++;
-                    dfsJoin(multipleInputJoinEdges, associateRecord, i, visited, path, count);
-                }
-            }
+            RowData projectedData = inputSideSpecs.get(i).getOutputSelector().getKey(associated.get(i));
+            projectedAssociated.add(projectedData);
         }
+        return projectedAssociated;
     }
 
     private List<List<RowData>> dfsJoin2(
