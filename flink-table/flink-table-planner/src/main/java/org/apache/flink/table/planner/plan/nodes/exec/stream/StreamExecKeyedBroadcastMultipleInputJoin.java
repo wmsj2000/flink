@@ -37,6 +37,7 @@ import org.apache.flink.table.planner.plan.utils.JoinUtil;
 import org.apache.flink.table.planner.plan.utils.KeySelectorUtil;
 import org.apache.flink.table.runtime.generated.GeneratedJoinCondition;
 import org.apache.flink.table.runtime.keyselector.RowDataKeySelector;
+import org.apache.flink.table.runtime.operators.join.FlinkJoinType;
 import org.apache.flink.table.runtime.operators.join.multiway.KeyedBroadcastMultipleInputStreamJoinOperatorFactory;
 import org.apache.flink.table.runtime.operators.join.multiway.MultipleInputJoinEdge;
 import org.apache.flink.table.runtime.operators.join.multiway.ParallelismAndResourceOfMultipleInputJoin;
@@ -49,6 +50,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -103,7 +105,7 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
         }
         List<List<int[]>> upsertKeyLists = getUpsertKeyLists();
         MultipleInputJoinEdge[][] multipleInputJoinEdges =
-                getMultipleInputJoinEdges(
+                getMultipleInputJoinEdgesV2(
                         planner, config, upsertKeyLists, internalTypeInfos, rowTypes);
         List<RowDataKeySelector> outputSelectors =
                 getInputSelectorsForOutput(planner, internalTypeInfos);
@@ -365,6 +367,145 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
         return joinEdges;
     }
 
+    private MultipleInputJoinEdge[][] getMultipleInputJoinEdgesV2(
+            PlannerBase planner,
+            ExecNodeConfig config,
+            List<List<int[]>> upsertKeyLists,
+            List<InternalTypeInfo<RowData>> internalTypeInfos,
+            List<RowType> rowTypes) {
+        int numberOfInputs = originalEdges.size();
+        MultipleInputJoinEdge[][] joinEdges =
+                new MultipleInputJoinEdge[numberOfInputs][numberOfInputs];
+        List<ExecNode<?>> originalNodes = getOriginalNodes();
+        for (ExecNode<?> node : originalNodes) {
+            if (!(node instanceof StreamExecJoin)) {
+                continue;
+            }
+            int[] leftKeys = ((StreamExecJoin) node).getJoinSpec().getLeftKeys();
+            int[] rightKeys = ((StreamExecJoin) node).getJoinSpec().getRightKeys();
+            boolean[] filterNulls = ((StreamExecJoin) node).getJoinSpec().getFilterNulls();
+            FlinkJoinType joinType = ((StreamExecJoin) node).getJoinSpec().getJoinType();
+            for (int i = 0; i < leftKeys.length; i++) {
+                Pair<Integer, int[]> leftInputJoinKeyPair =
+                        getJoinInputIndexWithCal(node.getInputEdges().get(0), new int[]{leftKeys[i]});
+                Pair<Integer, int[]> rightInpuJoinKeytPair =
+                        getJoinInputIndexWithCal(node.getInputEdges().get(1), new int[]{rightKeys[i]});
+                assert leftInputJoinKeyPair != null;
+                assert rightInpuJoinKeytPair != null;
+                int inputIndex1 = leftInputJoinKeyPair.getLeft();
+                int inputIndex2 = rightInpuJoinKeytPair.getLeft();
+                int[] joinKey1 = leftInputJoinKeyPair.getRight();
+                int[] joinKey2 = rightInpuJoinKeytPair.getRight();
+                boolean[] filterNullNew = new boolean[]{filterNulls[i]};
+                if(joinEdges[inputIndex1][inputIndex2]!=null){
+                    int[] joinKeyLeft = joinEdges[inputIndex1][inputIndex2].getLeftJoinKey();
+                    int[] joinKeyRight = joinEdges[inputIndex1][inputIndex2].getRightJoinKey();
+                    boolean[] filterNullTmp = joinEdges[inputIndex1][inputIndex2].getFilterNulls();
+                    joinKey1 = mergeArray(joinKeyLeft,joinKey1);
+                    joinKey2 = mergeArray(joinKeyRight,joinKey2);
+                    filterNullNew = mergeBooleanArray(filterNullTmp,filterNullNew);
+                }
+                RowDataKeySelector joinKeySelector1 =
+                        KeySelectorUtil.getRowDataSelector(
+                                planner.getFlinkContext().getClassLoader(),
+                                joinKey1,
+                                internalTypeInfos.get(inputIndex1));
+                RowDataKeySelector joinKeySelector2 =
+                        KeySelectorUtil.getRowDataSelector(
+                                planner.getFlinkContext().getClassLoader(),
+                                joinKey2,
+                                internalTypeInfos.get(inputIndex2));
+                JoinSpec joinSpec1 =
+                        new JoinSpec(
+                                joinType,
+                                joinKey1,
+                                joinKey2,
+                                filterNullNew,
+                                null);
+                GeneratedJoinCondition generatedCondition1 =
+                        JoinUtil.generateConditionFunction(
+                                config,
+                                planner.getFlinkContext().getClassLoader(),
+                                joinSpec1,
+                                rowTypes.get(inputIndex1),
+                                rowTypes.get(inputIndex2));
+                joinEdges[inputIndex1][inputIndex2] =
+                        new MultipleInputJoinEdge(
+                                generatedCondition1,
+                                joinType,
+                                inputIndex1,
+                                inputIndex2,
+                                joinKey1,
+                                joinKey2,
+                                upsertKeyLists.get(inputIndex1),
+                                upsertKeyLists.get(inputIndex2),
+                                internalTypeInfos.get(inputIndex1),
+                                internalTypeInfos.get(inputIndex2),
+                                joinKeySelector1,
+                                joinKeySelector2,
+                                filterNullNew);
+                JoinSpec joinSpec2 =
+                        new JoinSpec(
+                                joinType,
+                                joinKey2,
+                                joinKey1,
+                                filterNullNew,
+                                null);
+                GeneratedJoinCondition generatedCondition2 =
+                        JoinUtil.generateConditionFunction(
+                                config,
+                                planner.getFlinkContext().getClassLoader(),
+                                joinSpec2,
+                                rowTypes.get(inputIndex2),
+                                rowTypes.get(inputIndex1));
+                joinEdges[inputIndex2][inputIndex1] =
+                        new MultipleInputJoinEdge(
+                                generatedCondition2,
+                                joinType,
+                                inputIndex2,
+                                inputIndex1,
+                                joinKey2,
+                                joinKey1,
+                                upsertKeyLists.get(inputIndex2),
+                                upsertKeyLists.get(inputIndex1),
+                                internalTypeInfos.get(inputIndex2),
+                                internalTypeInfos.get(inputIndex1),
+                                joinKeySelector2,
+                                joinKeySelector1,
+                                filterNullNew);
+            }
+
+        }
+        return joinEdges;
+    }
+
+    private boolean[] mergeBooleanArray(boolean[] arr1, boolean[] arr2) {
+        if(arr1==null&&arr2==null){
+            return null;
+        }else if(arr1==null){
+            return Arrays.copyOfRange(arr2,0,arr2.length);
+        }else if(arr2==null){
+            return Arrays.copyOfRange(arr1,0,arr1.length);
+        }
+        boolean[] result=new boolean[arr1.length+arr2.length];
+        System.arraycopy(arr1,0,result,0,arr1.length);
+        System.arraycopy(arr2,0,result,arr1.length,arr2.length);
+        return result;
+    }
+
+    private int[] mergeArray(int[] arr1,int[] arr2){
+        if(arr1==null&&arr2==null){
+            return null;
+        }else if(arr1==null){
+            return Arrays.copyOfRange(arr2,0,arr2.length);
+        }else if(arr2==null){
+            return Arrays.copyOfRange(arr1,0,arr1.length);
+        }
+        int[] result=new int[arr1.length+arr2.length];
+        System.arraycopy(arr1,0,result,0,arr1.length);
+        System.arraycopy(arr2,0,result,arr1.length,arr2.length);
+        return result;
+    }
     private Pair<Integer, int[]> getJoinInputIndexWithCal(ExecEdge execEdge, int[] keyIndexs) {
         if (originalEdges.contains(execEdge)) {
             int inputIndex = originalEdges.indexOf(execEdge);
@@ -450,40 +591,6 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
             selectors.add(joinKeySelector);
         }
         return selectors;
-    }
-
-    private Pair<Integer, int[]> getJoinInputIndex(ExecEdge execEdge, int[] keyIndexs) {
-        if (originalEdges.contains(execEdge)) {
-            int inputIndex = originalEdges.indexOf(execEdge);
-            return Pair.of(inputIndex, keyIndexs);
-        }
-        if (execEdge.getSource() instanceof StreamExecExchange) {
-            execEdge = execEdge.getSource().getInputEdges().get(0);
-        }
-        if (execEdge.getSource() instanceof StreamExecJoin) {
-            ExecEdge preLeftEdge = execEdge.getSource().getInputEdges().get(0);
-            ExecEdge preRightEdge = execEdge.getSource().getInputEdges().get(1);
-            RowType preLeftOutputType = (RowType) preLeftEdge.getOutputType();
-            RowType preRightOutputType = (RowType) preRightEdge.getOutputType();
-            int leftSize = preLeftOutputType.getFields().size();
-            int rightSize = preRightOutputType.getFields().size();
-            if (allLessThan(keyIndexs, 0) || allMoreThan(keyIndexs, leftSize + rightSize)) {
-                throw new RuntimeException("join key out of bound");
-            }
-            boolean keysInLeft = allLessThan(keyIndexs, leftSize);
-            boolean keysInRight = allMoreThan(keyIndexs, leftSize);
-            if (!(keysInLeft || keysInRight)) {
-                throw new RuntimeException("join keys should come from single input");
-            }
-            if (keysInLeft) {
-                return getJoinInputIndex(preLeftEdge, keyIndexs);
-            } else {
-                int[] newIndexs = minus(keyIndexs, leftSize);
-                return getJoinInputIndex(preRightEdge, newIndexs);
-            }
-        } else {
-            throw new RuntimeException("mj group only contains exchange or join");
-        }
     }
 
     private List<List<int[]>> getUpsertKeyLists() {
