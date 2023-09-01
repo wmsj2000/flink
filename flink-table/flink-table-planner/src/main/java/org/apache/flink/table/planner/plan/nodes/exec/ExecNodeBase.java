@@ -62,7 +62,11 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
     @JacksonInject("isDeserialize")
     private boolean isCompiled;
 
-    private final String description;
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    private String description;
 
     private final LogicalType outputType;
 

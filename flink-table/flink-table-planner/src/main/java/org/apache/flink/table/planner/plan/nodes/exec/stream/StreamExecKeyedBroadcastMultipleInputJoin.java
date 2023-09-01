@@ -215,6 +215,8 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
             if (isBroadcast) {
 
                 inputProperty.setRequiredDistribution(BROADCAST_DISTRIBUTION);
+                ((StreamExecExchange) inputEdge.getSource())
+                        .setDescription("distribution=[broadcast]");
             } else {
                 if (inputProperty.getRequiredDistribution()
                         instanceof InputProperty.HashDistribution) {
@@ -387,23 +389,25 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
             FlinkJoinType joinType = ((StreamExecJoin) node).getJoinSpec().getJoinType();
             for (int i = 0; i < leftKeys.length; i++) {
                 Pair<Integer, int[]> leftInputJoinKeyPair =
-                        getJoinInputIndexWithCal(node.getInputEdges().get(0), new int[]{leftKeys[i]});
+                        getJoinInputIndexWithCal(
+                                node.getInputEdges().get(0), new int[] {leftKeys[i]});
                 Pair<Integer, int[]> rightInpuJoinKeytPair =
-                        getJoinInputIndexWithCal(node.getInputEdges().get(1), new int[]{rightKeys[i]});
+                        getJoinInputIndexWithCal(
+                                node.getInputEdges().get(1), new int[] {rightKeys[i]});
                 assert leftInputJoinKeyPair != null;
                 assert rightInpuJoinKeytPair != null;
                 int inputIndex1 = leftInputJoinKeyPair.getLeft();
                 int inputIndex2 = rightInpuJoinKeytPair.getLeft();
                 int[] joinKey1 = leftInputJoinKeyPair.getRight();
                 int[] joinKey2 = rightInpuJoinKeytPair.getRight();
-                boolean[] filterNullNew = new boolean[]{filterNulls[i]};
-                if(joinEdges[inputIndex1][inputIndex2]!=null){
+                boolean[] filterNullNew = new boolean[] {filterNulls[i]};
+                if (joinEdges[inputIndex1][inputIndex2] != null) {
                     int[] joinKeyLeft = joinEdges[inputIndex1][inputIndex2].getLeftJoinKey();
                     int[] joinKeyRight = joinEdges[inputIndex1][inputIndex2].getRightJoinKey();
                     boolean[] filterNullTmp = joinEdges[inputIndex1][inputIndex2].getFilterNulls();
-                    joinKey1 = mergeArray(joinKeyLeft,joinKey1);
-                    joinKey2 = mergeArray(joinKeyRight,joinKey2);
-                    filterNullNew = mergeBooleanArray(filterNullTmp,filterNullNew);
+                    joinKey1 = mergeArray(joinKeyLeft, joinKey1);
+                    joinKey2 = mergeArray(joinKeyRight, joinKey2);
+                    filterNullNew = mergeBooleanArray(filterNullTmp, filterNullNew);
                 }
                 RowDataKeySelector joinKeySelector1 =
                         KeySelectorUtil.getRowDataSelector(
@@ -416,12 +420,7 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
                                 joinKey2,
                                 internalTypeInfos.get(inputIndex2));
                 JoinSpec joinSpec1 =
-                        new JoinSpec(
-                                joinType,
-                                joinKey1,
-                                joinKey2,
-                                filterNullNew,
-                                null);
+                        new JoinSpec(joinType, joinKey1, joinKey2, filterNullNew, null);
                 GeneratedJoinCondition generatedCondition1 =
                         JoinUtil.generateConditionFunction(
                                 config,
@@ -445,12 +444,7 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
                                 joinKeySelector2,
                                 filterNullNew);
                 JoinSpec joinSpec2 =
-                        new JoinSpec(
-                                joinType,
-                                joinKey2,
-                                joinKey1,
-                                filterNullNew,
-                                null);
+                        new JoinSpec(joinType, joinKey2, joinKey1, filterNullNew, null);
                 GeneratedJoinCondition generatedCondition2 =
                         JoinUtil.generateConditionFunction(
                                 config,
@@ -474,38 +468,38 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
                                 joinKeySelector1,
                                 filterNullNew);
             }
-
         }
         return joinEdges;
     }
 
     private boolean[] mergeBooleanArray(boolean[] arr1, boolean[] arr2) {
-        if(arr1==null&&arr2==null){
+        if (arr1 == null && arr2 == null) {
             return null;
-        }else if(arr1==null){
-            return Arrays.copyOfRange(arr2,0,arr2.length);
-        }else if(arr2==null){
-            return Arrays.copyOfRange(arr1,0,arr1.length);
+        } else if (arr1 == null) {
+            return Arrays.copyOfRange(arr2, 0, arr2.length);
+        } else if (arr2 == null) {
+            return Arrays.copyOfRange(arr1, 0, arr1.length);
         }
-        boolean[] result=new boolean[arr1.length+arr2.length];
-        System.arraycopy(arr1,0,result,0,arr1.length);
-        System.arraycopy(arr2,0,result,arr1.length,arr2.length);
+        boolean[] result = new boolean[arr1.length + arr2.length];
+        System.arraycopy(arr1, 0, result, 0, arr1.length);
+        System.arraycopy(arr2, 0, result, arr1.length, arr2.length);
         return result;
     }
 
-    private int[] mergeArray(int[] arr1,int[] arr2){
-        if(arr1==null&&arr2==null){
+    private int[] mergeArray(int[] arr1, int[] arr2) {
+        if (arr1 == null && arr2 == null) {
             return null;
-        }else if(arr1==null){
-            return Arrays.copyOfRange(arr2,0,arr2.length);
-        }else if(arr2==null){
-            return Arrays.copyOfRange(arr1,0,arr1.length);
+        } else if (arr1 == null) {
+            return Arrays.copyOfRange(arr2, 0, arr2.length);
+        } else if (arr2 == null) {
+            return Arrays.copyOfRange(arr1, 0, arr1.length);
         }
-        int[] result=new int[arr1.length+arr2.length];
-        System.arraycopy(arr1,0,result,0,arr1.length);
-        System.arraycopy(arr2,0,result,arr1.length,arr2.length);
+        int[] result = new int[arr1.length + arr2.length];
+        System.arraycopy(arr1, 0, result, 0, arr1.length);
+        System.arraycopy(arr2, 0, result, arr1.length, arr2.length);
         return result;
     }
+
     private Pair<Integer, int[]> getJoinInputIndexWithCal(ExecEdge execEdge, int[] keyIndexs) {
         if (originalEdges.contains(execEdge)) {
             int inputIndex = originalEdges.indexOf(execEdge);

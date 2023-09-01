@@ -353,7 +353,49 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
 
         @Override
         public void retractRecord(RowData record) throws Exception {
-            return;
+            Integer cnt = recordState.get(record);
+            if (cnt != null) {
+                cnt -= 1;
+                if (cnt <= 0) {
+                    recordState.remove(record);
+                    recordSize--;
+                    removeFromIndex(record);
+                } else {
+                    recordState.put(record, cnt);
+                }
+            }
+        }
+
+        private void removeFromIndex(RowData record) throws Exception {
+            RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
+            RowData stateKey = stateKeySelector.getKey(record);
+            List<int[]> joinKeyList = inputSideSpec.getJoinKeyList();
+            List<RowDataKeySelector> selectors = inputSideSpec.getKeySelectorList();
+            for (int i = 0; i < joinKeyList.size(); i++) {
+                int[] joinKey = joinKeyList.get(i);
+                RowDataKeySelector selector = selectors.get(i);
+                if (joinKey != null && selector != null && selector != stateKeySelector) {
+                    RowData indexKey = selector.getKey(record);
+                    Iterable<HashMap<RowData, List<RowData>>> indexMapIter =
+                            indexsStates.get(i).get();
+                    HashMap<RowData, List<RowData>> indexMap = indexMapIter.iterator().next();
+                    if (!indexMap.containsKey(indexKey)) {
+                        continue;
+                    }
+                    boolean isRemove = false;
+                    List<RowData> rowDatas = indexMap.get(indexKey);
+                    for (int j = 0; j < rowDatas.size(); j++) {
+                        if (rowDatas.get(j).equals(stateKey)) {
+                            rowDatas.remove(j);
+                            isRemove = true;
+                            break;
+                        }
+                    }
+                    if (isRemove && rowDatas.isEmpty()) {
+                        indexMap.remove(indexKey);
+                    }
+                }
+            }
         }
 
         @Override
@@ -560,7 +602,52 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
 
         @Override
         public void retractRecord(RowData record) throws Exception {
-            return;
+            RowData key = inputSideSpec.getStateKeySelector().getKey(record);
+            Map<RowData, Integer> map = broadcastState.get(key);
+            if (map != null) {
+                Integer cnt = map.getOrDefault(record, 0);
+                cnt--;
+                if (cnt <= 0) {
+                    broadcastState.remove(key);
+                } else {
+                    map.put(record, cnt);
+                    broadcastState.put(key, map);
+                }
+                recordSize--;
+                removeFromIndex(record);
+            }
+        }
+
+        private void removeFromIndex(RowData record) throws Exception {
+            RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
+            RowData stateKey = stateKeySelector.getKey(record);
+            List<int[]> joinKeyList = inputSideSpec.getJoinKeyList();
+            List<RowDataKeySelector> selectors = inputSideSpec.getKeySelectorList();
+            for (int i = 0; i < joinKeyList.size(); i++) {
+                int[] joinKey = joinKeyList.get(i);
+                RowDataKeySelector selector = selectors.get(i);
+                if (joinKey != null && selector != null && selector != stateKeySelector) {
+                    RowData indexKey = selector.getKey(record);
+                    Iterable<HashMap<RowData, List<RowData>>> indexMapIter =
+                            indexsStates.get(i).get();
+                    HashMap<RowData, List<RowData>> indexMap = indexMapIter.iterator().next();
+                    if (!indexMap.containsKey(indexKey)) {
+                        continue;
+                    }
+                    boolean isRemove = false;
+                    List<RowData> rowDatas = indexMap.get(indexKey);
+                    for (int j = 0; j < rowDatas.size(); j++) {
+                        if (rowDatas.get(j).equals(stateKey)) {
+                            rowDatas.remove(j);
+                            isRemove = true;
+                            break;
+                        }
+                    }
+                    if (isRemove && rowDatas.isEmpty()) {
+                        indexMap.remove(indexKey);
+                    }
+                }
+            }
         }
 
         @Override

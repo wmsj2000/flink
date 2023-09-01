@@ -28,6 +28,7 @@ import org.apache.flink.table.planner.plan.nodes.exec.InputProperty;
 import org.apache.flink.table.planner.plan.nodes.exec.common.CommonExecExchange;
 import org.apache.flink.table.planner.plan.nodes.exec.spec.JoinSpec;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecCalc;
+import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecExchange;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecJoin;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecKeyedBroadcastMultipleInputJoin;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
@@ -149,14 +150,20 @@ public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor
     }
 
     private boolean canBeMultipleInputJoinNodeMember(ExecNodeWrapper wrapper) {
-        if (wrapper.execNode instanceof CommonExecExchange){
+        if (wrapper.execNode instanceof StreamExecExchange) {
             return true;
         }
-        if(wrapper.execNode instanceof StreamExecJoin) {
+        if (wrapper.execNode instanceof StreamExecJoin) {
+            ExecNode<?> inputNode = wrapper.execNode.getInputEdges().get(0).getSource();
+            if (inputNode instanceof StreamExecExchange) {
+                if (!(inputNode.getInputProperties().get(0).getRequiredDistribution()
+                        instanceof InputProperty.HashDistribution)) {
+                    return false;
+                }
+            }
             JoinSpec joinSpec = ((StreamExecJoin) wrapper.execNode).getJoinSpec();
-            if(joinSpec.getJoinType()== FlinkJoinType.INNER && !joinSpec
-                    .getNonEquiCondition()
-                    .isPresent()){
+            if (joinSpec.getJoinType() == FlinkJoinType.INNER
+                    && !joinSpec.getNonEquiCondition().isPresent()) {
                 return true;
             }
         }

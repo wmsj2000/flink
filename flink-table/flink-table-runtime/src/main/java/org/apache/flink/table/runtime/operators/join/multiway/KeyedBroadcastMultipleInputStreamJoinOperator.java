@@ -26,6 +26,7 @@ import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
 import org.apache.flink.streaming.api.operators.TimestampedCollector;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.util.RowDataUtil;
 import org.apache.flink.table.data.utils.MultipleInputJoinedRowData;
 import org.apache.flink.table.runtime.generated.GeneratedJoinCondition;
 import org.apache.flink.table.runtime.generated.JoinCondition;
@@ -156,19 +157,17 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
     public void processElementByIndex(StreamRecord<RowData> element, Integer inputIndex)
             throws Exception {
         RowData input = element.getValue();
-        // add record to state
-        recordStateViews.get(inputIndex).addRecord(input);
+        boolean isAccumulateMsg = RowDataUtil.isAccumulateMsg(input);
         RowKind inputRowKind = input.getRowKind();
-        // only support insert
-        if (inputRowKind != RowKind.INSERT) {
-            throw new RuntimeException(
-                    "MultipleInputStreamJoinOperator only support insert record");
+        // erase RowKind for later state updating
+        input.setRowKind(RowKind.INSERT);
+        if (isAccumulateMsg) {
+            recordStateViews.get(inputIndex).addRecord(input);
+        } else {
+            recordStateViews.get(inputIndex).retractRecord(input);
         }
-        List<RowData> path = new ArrayList<>(Collections.nCopies(numberOfInputs, null));
-        path.set(inputIndex, input);
         boolean[] visited = new boolean[numberOfInputs];
         visited[inputIndex] = true;
-
         List<RowData> inputList = new ArrayList<>();
         inputList.add(input);
         // dfsJoin(multipleInputJoinEdges,input,inputIndex,visited,path,0);
@@ -177,8 +176,9 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         for (List<RowData> associated : associatedLists) {
             if (!associated.contains(null)) {
                 List<RowData> projectedAssociated = projectAssociated(associated, inputSideSpecs);
-                collector.collect(
-                        (new MultipleInputJoinedRowData(RowKind.INSERT, projectedAssociated)));
+                MultipleInputJoinedRowData multipleInputJoinedRowData =
+                        new MultipleInputJoinedRowData(inputRowKind, projectedAssociated);
+                collector.collect(multipleInputJoinedRowData);
             }
         }
     }
