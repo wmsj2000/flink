@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -167,10 +168,8 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             recordStateViews.get(inputIndex).retractRecord(input);
         }
         boolean[] visited = new boolean[numberOfInputs];
-        visited[inputIndex] = true;
         List<RowData> inputList = new ArrayList<>();
         inputList.add(input);
-        // dfsJoin(multipleInputJoinEdges,input,inputIndex,visited,path,0);
         List<List<RowData>> associatedLists =
                 dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);
         for (List<RowData> associated : associatedLists) {
@@ -203,6 +202,8 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             throws Exception {
         List<List<RowData>> lists = new ArrayList<>();
         for (RowData input : inputs) {
+            boolean[] visitedCopy = Arrays.copyOf(visited, visited.length);
+            visitedCopy[inputIndex] = true;
             List<RowData> leftRecords = new ArrayList<>();
             leftRecords.add(input);
             List<List<RowData>> list = new ArrayList<>();
@@ -210,18 +211,17 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             current.set(inputIndex, input);
             list.add(current);
             for (int i = 0; i < numberOfInputs; i++) {
-                if (multipleInputJoinEdges[inputIndex][i] != null && !visited[i]) {
-                    visited[i] = true;
+                if (multipleInputJoinEdges[inputIndex][i] != null && !visitedCopy[i]) {
                     JoinCondition condition = joinConditions[inputIndex][i];
                     AbstractKeyedBroadcastMultipleInputJoinRecordStateView rightState =
                             recordStateViews.get(i);
                     List<RowData> associatedRecords =
                             matchRows(leftRecords, inputIndex, rightState, condition);
                     if (associatedRecords.isEmpty()) {
-                        continue;
+                        break;
                     }
                     List<List<RowData>> dfs =
-                            dfsJoin2(multipleInputJoinEdges, associatedRecords, i, visited);
+                            dfsJoin2(multipleInputJoinEdges, associatedRecords, i, visitedCopy);
                     list = combineAssociatedLists(list, dfs);
                 }
             }

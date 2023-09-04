@@ -390,6 +390,97 @@ public class MultipleInputStreamJoinTest extends TestLogger {
 
     @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
     @ValueSource(booleans = {true})
+    public void testTpchQ2(boolean multipleJoinEnable) {
+        tEnv.getConfig()
+                .getConfiguration()
+                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED, true);
+        // 获取注册的配置
+        ExecutionConfig.GlobalJobParameters parameters = env.getConfig().getGlobalJobParameters();
+        Map<String, String> map = parameters.toMap();
+        String data = map.getOrDefault("data", "1g");
+        tEnv.getConfig().setIdleStateRetention(Duration.ofHours(24));
+        Configuration configuration = tEnv.getConfig().getConfiguration();
+        configuration.setString("pipeline.name", "tpch");
+        createTables(tEnv);
+        String query =
+                "select\n"
+                        + "        s_acctbal,\n"
+                        + "        s_name,\n"
+                        + "        n_name,\n"
+                        + "        p_partkey,\n"
+                        + "        p_mfgr,\n"
+                        + "        s_address,\n"
+                        + "        s_phone,\n"
+                        + "        s_comment\n"
+                        + "from\n"
+                        + "        part,\n"
+                        + "        supplier,\n"
+                        + "        partsupp,\n"
+                        + "        nation,\n"
+                        + "        region\n"
+                        + "where\n"
+                        + "        p_partkey = ps_partkey\n"
+                        + "        and s_suppkey = ps_suppkey\n"
+                        + "        and p_size = 48\n"
+                        + "        and p_type like '%STEEL'\n"
+                        + "        and s_nationkey = n_nationkey\n"
+                        + "        and n_regionkey = r_regionkey\n"
+                        + "        and r_name = 'EUROPE'\n"
+                        + "        and ps_supplycost = (\n"
+                        + "                select\n"
+                        + "                        min(ps_supplycost)\n"
+                        + "                from\n"
+                        + "                        partsupp,\n"
+                        + "                        supplier,\n"
+                        + "                        nation,\n"
+                        + "                        region\n"
+                        + "                where\n"
+                        + "                        p_partkey = ps_partkey\n"
+                        + "                        and s_suppkey = ps_suppkey\n"
+                        + "                        and s_nationkey = n_nationkey\n"
+                        + "                        and n_regionkey = r_regionkey\n"
+                        + "                        and r_name = 'EUROPE'\n"
+                        + "        );";
+        System.out.println(tEnv.explainSql(query));
+        tEnv.executeSql(query).print();
+    }
+    @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
+    @ValueSource(booleans = {true})
+    public void testTpchQ3(boolean multipleJoinEnable) {
+        tEnv.getConfig()
+                .getConfiguration()
+                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED, true);
+        // 获取注册的配置
+        ExecutionConfig.GlobalJobParameters parameters = env.getConfig().getGlobalJobParameters();
+        Map<String, String> map = parameters.toMap();
+        String data = map.getOrDefault("data", "1g");
+        tEnv.getConfig().setIdleStateRetention(Duration.ofHours(24));
+        Configuration configuration = tEnv.getConfig().getConfiguration();
+        configuration.setString("pipeline.name", "tpch");
+        createTables(tEnv);
+        String query =
+                "select\n"
+                        + "        l_orderkey,\n"
+                        + "        sum(l_extendedprice * (1 - l_discount)) as revenue,\n"
+                        + "        o_orderdate,\n"
+                        + "        o_shippriority\n"
+                        + "from\n"
+                        + "      \tlineitem,\n"
+                        + "        orders,\n"
+                        + "        customer\n"
+                        + "where\n"
+                        + "        l_orderkey = o_orderkey\n"
+                        + "        and c_custkey = o_custkey\n"
+                        + "group by\n"
+                        + "        l_orderkey,\n"
+                        + "        o_orderdate,\n"
+                        + "        o_shippriority\n"
+                        + ";";
+        tEnv.executeSql(query).print();
+    }
+
+    @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
+    @ValueSource(booleans = {true})
     public void testTpch(boolean multipleJoinEnable) {
         tEnv.getConfig()
                 .getConfiguration()
@@ -411,13 +502,12 @@ public class MultipleInputStreamJoinTest extends TestLogger {
         HashMap<String, String> queriesMap = getTpchQueries();
         HashMap<String, String> sinkTableMap = getSinkTables();
         String number = "2";
-        query = queriesMap.get("Q" + number);
+        /*        query = queriesMap.get("Q" + number);
         tEnv.executeSql(sinkTableMap.get("Q" + number));
         String queryToSink = "Insert into sink_table_q" + number + " \n" + query;
         System.out.println(tEnv.explainSql(queryToSink));
-        tEnv.executeSql(queryToSink).print();
-        // tEnv.executeSql("INSERT INTO sink_table_query " + query);
-
+        tEnv.executeSql(queryToSink).print();*/
+        tEnv.executeSql(query).print();
     }
 
     public void createTables(TableEnvironment tEnv) {
@@ -433,7 +523,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "    c_comment VARCHAR(117)\n"
                         + ") WITH (\n"
                         + "  'connector' = 'datagen',\n"
-                        + "  'rows-per-second'='10',\n"
+                        + "  'rows-per-second'='100',\n"
                         + "  'fields.c_custkey.kind'='sequence' ,\n"
                         + "  'fields.c_custkey.start'='1',\n"
                         + "  'fields.c_custkey.end'='1000'\n"
@@ -458,7 +548,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "    l_comment VARCHAR(44)\n"
                         + ") WITH (\n"
                         + "  'connector' = 'datagen',\n"
-                        + "  'rows-per-second'='10',\n"
+                        + "  'rows-per-second'='100',\n"
                         + "  'fields.l_orderkey.kind'='sequence' ,\n"
                         + "  'fields.l_orderkey.start'='1',\n"
                         + "  'fields.l_orderkey.end'='1000'\n"
@@ -471,7 +561,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "    n_comment VARCHAR(152)\n"
                         + ") WITH (\n"
                         + "  'connector' = 'datagen',\n"
-                        + "  'rows-per-second'='10',\n"
+                        + "  'rows-per-second'='100',\n"
                         + "  'fields.n_nationkey.kind'='sequence' ,\n"
                         + "  'fields.n_nationkey.start'='1',\n"
                         + "  'fields.n_nationkey.end'='1000',\n"
@@ -492,10 +582,13 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "    o_comment VARCHAR(79)\n"
                         + ") WITH (\n"
                         + "  'connector' = 'datagen',\n"
-                        + "  'rows-per-second'='10',\n"
+                        + "  'rows-per-second'='100',\n"
                         + "  'fields.o_orderkey.kind'='sequence' ,\n"
                         + "  'fields.o_orderkey.start'='1',\n"
-                        + "  'fields.o_orderkey.end'='1000'\n"
+                        + "  'fields.o_orderkey.end'='1000',\n"
+                        + "  'fields.o_custkey.kind'='sequence' ,\n"
+                        + "  'fields.o_custkey.start'='1',\n"
+                        + "  'fields.o_custkey.end'='1000'\n"
                         + ");");
         tEnv.executeSql(
                 "CREATE TABLE part (\n"
@@ -510,7 +603,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "    p_comment VARCHAR(23)\n"
                         + ") WITH (\n"
                         + "  'connector' = 'datagen',\n"
-                        + "  'rows-per-second'='10',\n"
+                        + "  'rows-per-second'='100',\n"
                         + "  'fields.p_partkey.kind'='sequence' ,\n"
                         + "  'fields.p_partkey.start'='1',\n"
                         + "  'fields.p_partkey.end'='1000'\n"
@@ -524,7 +617,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "    ps_comment VARCHAR(199)\n"
                         + ") WITH (\n"
                         + "  'connector' = 'datagen',\n"
-                        + "  'rows-per-second'='10',\n"
+                        + "  'rows-per-second'='100',\n"
                         + "  'fields.ps_partkey.kind'='sequence' ,\n"
                         + "  'fields.ps_partkey.start'='1',\n"
                         + "  'fields.ps_partkey.end'='1000',\n"
@@ -539,7 +632,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "    r_comment VARCHAR(152)\n"
                         + ") WITH (\n"
                         + "  'connector' = 'datagen',\n"
-                        + "  'rows-per-second'='10',\n"
+                        + "  'rows-per-second'='100',\n"
                         + "  'fields.r_regionkey.kind'='sequence' ,\n"
                         + "  'fields.r_regionkey.start'='1',\n"
                         + "  'fields.r_regionkey.end'='1000'\n"
@@ -555,7 +648,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "    s_comment VARCHAR(101)\n"
                         + ") WITH (\n"
                         + "  'connector' = 'datagen',\n"
-                        + "  'rows-per-second'='10',\n"
+                        + "  'rows-per-second'='100',\n"
                         + "  'fields.s_suppkey.kind'='sequence' ,\n"
                         + "  'fields.s_suppkey.start'='1',\n"
                         + "  'fields.s_suppkey.end'='1000',\n"
