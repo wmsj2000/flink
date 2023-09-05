@@ -172,14 +172,17 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         inputList.add(input);
         List<List<RowData>> associatedLists =
                 dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);
-        for (List<RowData> associated : associatedLists) {
-            if (!associated.contains(null)) {
-                List<RowData> projectedAssociated = projectAssociated(associated, inputSideSpecs);
-                MultipleInputJoinedRowData multipleInputJoinedRowData =
-                        new MultipleInputJoinedRowData(inputRowKind, projectedAssociated);
-                collector.collect(multipleInputJoinedRowData);
+        if(associatedLists!=null){
+            for (List<RowData> associated : associatedLists) {
+                if (!associated.contains(null)) {
+                    List<RowData> projectedAssociated = projectAssociated(associated, inputSideSpecs);
+                    MultipleInputJoinedRowData multipleInputJoinedRowData =
+                            new MultipleInputJoinedRowData(inputRowKind, projectedAssociated);
+                    collector.collect(multipleInputJoinedRowData);
+                }
             }
         }
+
     }
 
     private List<RowData> projectAssociated(
@@ -218,6 +221,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
                     List<RowData> associatedRecords =
                             matchRows(leftRecords, inputIndex, rightState, condition);
                     if (associatedRecords.isEmpty()) {
+                        list = null;
                         break;
                     }
                     List<List<RowData>> dfs =
@@ -225,7 +229,9 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
                     list = combineAssociatedLists(list, dfs);
                 }
             }
-            lists.addAll(list);
+            if(list!=null){
+                lists.addAll(list);
+            }
         }
         return lists;
     }
@@ -233,8 +239,8 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
     private List<List<RowData>> combineAssociatedLists(
             List<List<RowData>> combinedLists, List<List<RowData>> mergedLists) {
         List<List<RowData>> combineAssociatedLists = new ArrayList<>();
-        if (combinedLists == null) {
-            return mergedLists;
+        if (combinedLists == null || mergedLists ==null) {
+            return null;
         }
         for (List<RowData> list1 : combinedLists) {
             for (List<RowData> list2 : mergedLists) {
