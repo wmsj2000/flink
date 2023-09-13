@@ -218,7 +218,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             } else if (data1 == null && data2 == null) {
                 mergedList.set(i, null);
             } else {
-                throw new RuntimeException("merge list error");
+                mergedList.set(i,data1);
             }
         }
         return mergedList;
