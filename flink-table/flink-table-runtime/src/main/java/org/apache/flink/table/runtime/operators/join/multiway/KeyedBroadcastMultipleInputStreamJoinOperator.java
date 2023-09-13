@@ -128,6 +128,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         inputList.add(input);
         boolean[] visited = new boolean[numberOfInputs];
         List<Integer> path = new ArrayList<>();
+        visited[inputIndex] = true;
         List<List<RowData>> associatedLists =
                 dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);
         for (List<RowData> associated : associatedLists) {
