@@ -444,6 +444,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
         System.out.println(tEnv.explainSql(query));
         tEnv.executeSql(query).print();
     }
+
     @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
     @ValueSource(booleans = {true})
     public void testTpchQ3(boolean multipleJoinEnable) {
@@ -501,8 +502,8 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "AND nation.n_regionkey = region.r_regionkey;";
         HashMap<String, String> queriesMap = getTpchQueries();
         HashMap<String, String> sinkTableMap = getSinkTables();
-        String number = "2";
-        /*        query = queriesMap.get("Q" + number);
+        /*        String number = "21";
+        query = queriesMap.get("Q" + number);
         tEnv.executeSql(sinkTableMap.get("Q" + number));
         String queryToSink = "Insert into sink_table_q" + number + " \n" + query;
         System.out.println(tEnv.explainSql(queryToSink));
@@ -701,9 +702,9 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "        s_name,\n"
                         + "        count(*) as numwait\n"
                         + "from\n"
-                        + "        supplier,\n"
                         + "        lineitem l1,\n"
                         + "        orders,\n"
+                        + "        supplier,\n"
                         + "        nation\n"
                         + "where\n"
                         + "        s_suppkey = l1.l_suppkey\n"

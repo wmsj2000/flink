@@ -169,6 +169,10 @@ public class KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor
         }
         if (wrapper.execNode instanceof StreamExecCalc
                 && wrapper.execNode.getInputEdges().get(0).getSource() instanceof StreamExecJoin
+                && ((StreamExecJoin) wrapper.execNode.getInputEdges().get(0).getSource())
+                                .getJoinSpec()
+                                .getJoinType()
+                        == FlinkJoinType.INNER
                 && ((StreamExecCalc) wrapper.execNode).getCondition() == null) {
             return true;
         }

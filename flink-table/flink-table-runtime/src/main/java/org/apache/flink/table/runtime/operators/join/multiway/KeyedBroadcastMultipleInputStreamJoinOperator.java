@@ -41,7 +41,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -60,6 +59,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
     protected transient TimestampedCollector<RowData> collector;
     private final MultipleInputJoinEdge[][] multipleInputJoinEdges;
     private transient JoinConditionWithNullFilters[][] joinConditions;
+    private transient List<List<MultipleInputJoinEdge>> joinPaths;
 
     final Logger logger = LoggerFactory.getLogger(MultipleInputStreamJoinOperator.class);
 
@@ -84,50 +84,6 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         this.recordStateViews = initStates();
         this.joinConditions = getConditions();
         this.collector = new TimestampedCollector<>(output);
-    }
-
-    private JoinConditionWithNullFilters[][] getConditions() throws Exception {
-        JoinConditionWithNullFilters[][] joinConditions =
-                new JoinConditionWithNullFilters[numberOfInputs][numberOfInputs];
-        for (int i = 0; i < numberOfInputs; i++) {
-            for (int j = 0; j < numberOfInputs; j++) {
-                if (multipleInputJoinEdges[i][j] == null) {
-                    continue;
-                }
-                GeneratedJoinCondition generatedJoinCondition =
-                        multipleInputJoinEdges[i][j].getGeneratedJoinCondition();
-                JoinCondition condition =
-                        generatedJoinCondition.newInstance(
-                                getRuntimeContext().getUserCodeClassLoader());
-                JoinConditionWithNullFilters joinCondition =
-                        new JoinConditionWithNullFilters(condition, new boolean[] {}, this);
-                joinCondition.setRuntimeContext(getRuntimeContext());
-                joinCondition.open(new Configuration());
-                joinConditions[i][j] = joinCondition;
-            }
-        }
-        return joinConditions;
-    }
-
-    private List<AbstractKeyedBroadcastMultipleInputJoinRecordStateView> initStates()
-            throws Exception {
-        List<AbstractKeyedBroadcastMultipleInputJoinRecordStateView> recordStateViews =
-                new ArrayList<>();
-        for (int i = 0; i < numberOfInputs; i++) {
-            String stateName = "input" + i;
-            AbstractKeyedBroadcastMultipleInputJoinRecordStateView joinRecordStateView =
-                    KeyedBroadcastMultipleInputJoinRecordStateViews.create(
-                            getRuntimeContext(),
-                            stateName,
-                            inputSideSpecs.get(i),
-                            numberOfInputs,
-                            this,
-                            internalTypeInfos.get(i),
-                            multipleInputJoinEdges,
-                            stateRetentionTime);
-            recordStateViews.add(joinRecordStateView);
-        }
-        return recordStateViews;
     }
 
     @Override
@@ -167,22 +123,19 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         } else {
             recordStateViews.get(inputIndex).retractRecord(input);
         }
-        boolean[] visited = new boolean[numberOfInputs];
         List<RowData> inputList = new ArrayList<>();
         inputList.add(input);
+        boolean[] visited = new boolean[numberOfInputs];
         List<List<RowData>> associatedLists =
                 dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);
-        if(associatedLists!=null){
-            for (List<RowData> associated : associatedLists) {
-                if (!associated.contains(null)) {
-                    List<RowData> projectedAssociated = projectAssociated(associated, inputSideSpecs);
-                    MultipleInputJoinedRowData multipleInputJoinedRowData =
-                            new MultipleInputJoinedRowData(inputRowKind, projectedAssociated);
-                    collector.collect(multipleInputJoinedRowData);
-                }
+        for (List<RowData> associated : associatedLists) {
+            if (!associated.contains(null)) {
+                List<RowData> projectedAssociated = projectAssociated(associated, inputSideSpecs);
+                MultipleInputJoinedRowData multipleInputJoinedRowData =
+                        new MultipleInputJoinedRowData(inputRowKind, projectedAssociated);
+                collector.collect(multipleInputJoinedRowData);
             }
         }
-
     }
 
     private List<RowData> projectAssociated(
@@ -205,8 +158,10 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             throws Exception {
         List<List<RowData>> lists = new ArrayList<>();
         for (RowData input : inputs) {
-            boolean[] visitedCopy = Arrays.copyOf(visited, visited.length);
-            visitedCopy[inputIndex] = true;
+            if (visited[inputIndex]) {
+                continue;
+            }
+            visited[inputIndex] = true;
             List<RowData> leftRecords = new ArrayList<>();
             leftRecords.add(input);
             List<List<RowData>> list = new ArrayList<>();
@@ -214,7 +169,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             current.set(inputIndex, input);
             list.add(current);
             for (int i = 0; i < numberOfInputs; i++) {
-                if (multipleInputJoinEdges[inputIndex][i] != null && !visitedCopy[i]) {
+                if (multipleInputJoinEdges[inputIndex][i] != null && !visited[i]) {
                     JoinCondition condition = joinConditions[inputIndex][i];
                     AbstractKeyedBroadcastMultipleInputJoinRecordStateView rightState =
                             recordStateViews.get(i);
@@ -225,13 +180,14 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
                         break;
                     }
                     List<List<RowData>> dfs =
-                            dfsJoin2(multipleInputJoinEdges, associatedRecords, i, visitedCopy);
+                            dfsJoin2(multipleInputJoinEdges, associatedRecords, i, visited);
                     list = combineAssociatedLists(list, dfs);
                 }
             }
-            if(list!=null){
+            if (list != null) {
                 lists.addAll(list);
             }
+            visited[inputIndex] = false;
         }
         return lists;
     }
@@ -239,7 +195,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
     private List<List<RowData>> combineAssociatedLists(
             List<List<RowData>> combinedLists, List<List<RowData>> mergedLists) {
         List<List<RowData>> combineAssociatedLists = new ArrayList<>();
-        if (combinedLists == null || mergedLists ==null) {
+        if (combinedLists == null || mergedLists == null) {
             return null;
         }
         for (List<RowData> list1 : combinedLists) {
@@ -286,5 +242,49 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             }
         }
         return associations;
+    }
+
+    private JoinConditionWithNullFilters[][] getConditions() throws Exception {
+        JoinConditionWithNullFilters[][] joinConditions =
+                new JoinConditionWithNullFilters[numberOfInputs][numberOfInputs];
+        for (int i = 0; i < numberOfInputs; i++) {
+            for (int j = 0; j < numberOfInputs; j++) {
+                if (multipleInputJoinEdges[i][j] == null) {
+                    continue;
+                }
+                GeneratedJoinCondition generatedJoinCondition =
+                        multipleInputJoinEdges[i][j].getGeneratedJoinCondition();
+                JoinCondition condition =
+                        generatedJoinCondition.newInstance(
+                                getRuntimeContext().getUserCodeClassLoader());
+                JoinConditionWithNullFilters joinCondition =
+                        new JoinConditionWithNullFilters(condition, new boolean[] {}, this);
+                joinCondition.setRuntimeContext(getRuntimeContext());
+                joinCondition.open(new Configuration());
+                joinConditions[i][j] = joinCondition;
+            }
+        }
+        return joinConditions;
+    }
+
+    private List<AbstractKeyedBroadcastMultipleInputJoinRecordStateView> initStates()
+            throws Exception {
+        List<AbstractKeyedBroadcastMultipleInputJoinRecordStateView> recordStateViews =
+                new ArrayList<>();
+        for (int i = 0; i < numberOfInputs; i++) {
+            String stateName = "input" + i;
+            AbstractKeyedBroadcastMultipleInputJoinRecordStateView joinRecordStateView =
+                    KeyedBroadcastMultipleInputJoinRecordStateViews.create(
+                            getRuntimeContext(),
+                            stateName,
+                            inputSideSpecs.get(i),
+                            numberOfInputs,
+                            this,
+                            internalTypeInfos.get(i),
+                            multipleInputJoinEdges,
+                            stateRetentionTime);
+            recordStateViews.add(joinRecordStateView);
+        }
+        return recordStateViews;
     }
 }
