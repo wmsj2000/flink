@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -126,6 +127,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         List<RowData> inputList = new ArrayList<>();
         inputList.add(input);
         boolean[] visited = new boolean[numberOfInputs];
+        List<Integer> path = new ArrayList<>();
         List<List<RowData>> associatedLists =
                 dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);
         for (List<RowData> associated : associatedLists) {
@@ -158,10 +160,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             throws Exception {
         List<List<RowData>> lists = new ArrayList<>();
         for (RowData input : inputs) {
-            if (visited[inputIndex]) {
-                continue;
-            }
-            visited[inputIndex] = true;
+            boolean[] visitedCopy = Arrays.copyOfRange(visited,0, numberOfInputs);
             List<RowData> leftRecords = new ArrayList<>();
             leftRecords.add(input);
             List<List<RowData>> list = new ArrayList<>();
@@ -170,6 +169,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             list.add(current);
             for (int i = 0; i < numberOfInputs; i++) {
                 if (multipleInputJoinEdges[inputIndex][i] != null && !visited[i]) {
+                    visited[i] = true;
                     JoinCondition condition = joinConditions[inputIndex][i];
                     AbstractKeyedBroadcastMultipleInputJoinRecordStateView rightState =
                             recordStateViews.get(i);
@@ -187,7 +187,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             if (list != null) {
                 lists.addAll(list);
             }
-            visited[inputIndex] = false;
+            visited = visitedCopy;
         }
         return lists;
     }
@@ -218,7 +218,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             } else if (data1 == null && data2 == null) {
                 mergedList.set(i, null);
             } else {
-                mergedList.set(i,data1);
+                throw new RuntimeException("mergeList error");
             }
         }
         return mergedList;
