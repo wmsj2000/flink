@@ -173,11 +173,25 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
         for (ExecEdge originalEdge : originalEdges) {
             inputNodes.add(originalEdge.getSource());
         }
+        boolean[] visited = new boolean[inputNodes.size()];
         for (ExecEdge inputEdge : inputEdges) {
-            int newIndex = inputNodes.indexOf(inputEdge.getSource());
+            int newIndex = getIndexOfInputNodes(inputNodes,inputEdge.getSource(),visited);
+            if(newIndex==-1){
+                throw new RuntimeException("input node not found");
+            }
+            visited[newIndex] = true;
             reorderedInputEdges.set(newIndex, inputEdge);
         }
         return reorderedInputEdges;
+    }
+
+    private int getIndexOfInputNodes(List<ExecNode<?>> inputNodes, ExecNode<?> node, boolean[] visited) {
+        for(int i=0;i<inputNodes.size();i++){
+            if(inputNodes.get(i) ==node&&!visited[i]){
+                return i;
+            }
+        }
+        return -1;
     }
 
     private List<ExecEdge> getSortedEdges(ExecNode<?> rootNode) {

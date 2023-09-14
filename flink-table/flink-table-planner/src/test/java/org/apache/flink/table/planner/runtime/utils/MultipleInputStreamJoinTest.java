@@ -447,7 +447,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
 
     @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
     @ValueSource(booleans = {true})
-    public void testTpchQ3(boolean multipleJoinEnable) {
+    public void testTpchQ7(boolean multipleJoinEnable) {
         tEnv.getConfig()
                 .getConfiguration()
                 .set(OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED, true);
@@ -459,25 +459,25 @@ public class MultipleInputStreamJoinTest extends TestLogger {
         Configuration configuration = tEnv.getConfig().getConfiguration();
         configuration.setString("pipeline.name", "tpch");
         createTables(tEnv);
-        String query =
-                "select\n"
-                        + "        l_orderkey,\n"
-                        + "        sum(l_extendedprice * (1 - l_discount)) as revenue,\n"
-                        + "        o_orderdate,\n"
-                        + "        o_shippriority\n"
-                        + "from\n"
-                        + "      \tlineitem,\n"
-                        + "        orders,\n"
-                        + "        customer\n"
-                        + "where\n"
-                        + "        l_orderkey = o_orderkey\n"
-                        + "        and c_custkey = o_custkey\n"
-                        + "group by\n"
-                        + "        l_orderkey,\n"
-                        + "        o_orderdate,\n"
-                        + "        o_shippriority\n"
-                        + ";";
-        tEnv.executeSql(query).print();
+        String Q7 =
+                        "                select\n"
+                        + "                        n1.n_name as supp_nation,\n"
+                        + "                        n2.n_name as cust_nation\n"
+                        + "                from\n"
+                        + "                        supplier,\n"
+                        + "                        lineitem,\n"
+                        + "                        orders,\n"
+                        + "                        customer,\n"
+                        + "                        nation n1,\n"
+                        + "                        nation n2\n"
+                        + "                where\n"
+                        + "                        s_suppkey = l_suppkey\n"
+                        + "                        and o_orderkey = l_orderkey\n"
+                        + "                        and c_custkey = o_custkey\n"
+                        + "                        and s_nationkey = n1.n_nationkey\n"
+                        + "                        and c_nationkey = n2.n_nationkey\n";
+    System.out.println(tEnv.explainSql(Q7));
+    tEnv.executeSql(Q7).print();
     }
 
     @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
@@ -502,12 +502,12 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "AND nation.n_regionkey = region.r_regionkey;";
         HashMap<String, String> queriesMap = getTpchQueries();
         HashMap<String, String> sinkTableMap = getSinkTables();
-        /*        String number = "21";
+        String number = "7";
         query = queriesMap.get("Q" + number);
         tEnv.executeSql(sinkTableMap.get("Q" + number));
         String queryToSink = "Insert into sink_table_q" + number + " \n" + query;
         System.out.println(tEnv.explainSql(queryToSink));
-        tEnv.executeSql(queryToSink).print();*/
+        tEnv.executeSql(queryToSink).print();
         tEnv.executeSql(query).print();
     }
 
@@ -527,7 +527,10 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "  'rows-per-second'='100',\n"
                         + "  'fields.c_custkey.kind'='sequence' ,\n"
                         + "  'fields.c_custkey.start'='1',\n"
-                        + "  'fields.c_custkey.end'='1000'\n"
+                        + "  'fields.c_custkey.end'='1000',\n"
+                        + "  'fields.c_nationkey.kind'='sequence' ,\n"
+                        + "  'fields.c_nationkey.start'='1',\n"
+                        + "  'fields.c_nationkey.end'='1000'\n"
                         + ");");
         tEnv.executeSql(
                 "CREATE TABLE lineitem (\n"
@@ -552,7 +555,10 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "  'rows-per-second'='100',\n"
                         + "  'fields.l_orderkey.kind'='sequence' ,\n"
                         + "  'fields.l_orderkey.start'='1',\n"
-                        + "  'fields.l_orderkey.end'='1000'\n"
+                        + "  'fields.l_orderkey.end'='1000',\n"
+                        + "  'fields.l_suppkey.kind'='sequence' ,\n"
+                        + "  'fields.l_suppkey.start'='1',\n"
+                        + "  'fields.l_suppkey.end'='1000'\n"
                         + ");");
         tEnv.executeSql(
                 "CREATE TABLE nation (\n"
