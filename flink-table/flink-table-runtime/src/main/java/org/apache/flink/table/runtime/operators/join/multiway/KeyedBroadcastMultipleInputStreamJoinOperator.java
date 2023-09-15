@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 
 /**
@@ -127,10 +128,10 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         List<RowData> inputList = new ArrayList<>();
         inputList.add(input);
         boolean[] visited = new boolean[numberOfInputs];
-        List<Integer> path = new ArrayList<>();
+        HashSet<MultipleInputJoinEdge> path = new HashSet<>();
         visited[inputIndex] = true;
         List<List<RowData>> associatedLists =
-                dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);
+                dfsJoin(multipleInputJoinEdges, inputList, inputIndex, visited,path);
         for (List<RowData> associated : associatedLists) {
             if (!associated.contains(null)) {
                 List<RowData> projectedAssociated = projectAssociated(associated, inputSideSpecs);
@@ -151,6 +152,63 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             projectedAssociated.add(projectedData);
         }
         return projectedAssociated;
+    }
+
+    private List<List<RowData>> dfsJoin(
+            MultipleInputJoinEdge[][] multipleInputJoinEdges,
+            List<RowData> inputs,
+            int inputIndex,
+            boolean[] visited,
+            HashSet<MultipleInputJoinEdge> path)
+            throws Exception {
+        List<List<RowData>> lists = new ArrayList<>();
+        for (RowData input : inputs) {
+            boolean[] visitedCopy = Arrays.copyOfRange(visited,0, numberOfInputs);
+            HashSet<MultipleInputJoinEdge> pathCopy = new HashSet<>(path);
+            List<RowData> leftRecords = new ArrayList<>();
+            leftRecords.add(input);
+            List<List<RowData>> list = new ArrayList<>();
+            List<RowData> current = new ArrayList<>(Collections.nCopies(numberOfInputs, null));
+            current.set(inputIndex, input);
+            list.add(current);
+            for (int i = 0; i < numberOfInputs; i++) {
+                MultipleInputJoinEdge edge = multipleInputJoinEdges[inputIndex][i];
+                if (edge != null && !path.contains(edge)){
+                    path.add(edge);
+                    MultipleInputJoinEdge edge2 = multipleInputJoinEdges[i][inputIndex];
+                    path.add(edge2);
+                    JoinCondition condition = joinConditions[inputIndex][i];
+                    AbstractKeyedBroadcastMultipleInputJoinRecordStateView rightState =
+                            recordStateViews.get(i);
+                    List<RowData> associatedRecords =
+                            matchRows(leftRecords, inputIndex, rightState, condition);
+                    if (associatedRecords.isEmpty()) {
+                        list = null;
+                        break;
+                    }
+                    List<List<RowData>> dfs;
+                    if(!visited[i]){
+                        visited[i] = true;
+                        dfs = dfsJoin(multipleInputJoinEdges, associatedRecords, i, visited,path);
+                    }else {
+                        HashSet<MultipleInputJoinEdge> endPath = new HashSet<>();
+                        for (int j = 0; j < numberOfInputs; j++) {
+                            if(multipleInputJoinEdges[i][j]!=null){
+                                endPath.add(multipleInputJoinEdges[i][j]);
+                            }
+                        }
+                        dfs = dfsJoin(multipleInputJoinEdges, associatedRecords, i, visited,endPath);
+                    }
+                    list = combineAssociatedLists(list, dfs);
+                }
+            }
+            if (list != null) {
+                lists.addAll(list);
+            }
+            visited = visitedCopy;
+            path = pathCopy;
+        }
+        return lists;
     }
 
     private List<List<RowData>> dfsJoin2(
@@ -201,7 +259,11 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         }
         for (List<RowData> list1 : combinedLists) {
             for (List<RowData> list2 : mergedLists) {
-                combineAssociatedLists.add(mergeList(list1, list2));
+                List<RowData> mergeList = mergeList(list1, list2);
+                if(mergeList!=null){
+                    combineAssociatedLists.add(mergeList);
+                }
+
             }
         }
         return combineAssociatedLists;
@@ -219,7 +281,11 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
             } else if (data1 == null && data2 == null) {
                 mergedList.set(i, null);
             } else {
-                throw new RuntimeException("mergeList error");
+                if(data1==data2){
+                    mergedList.set(i,data1);
+                }else {
+                    mergedList=null;
+                }
             }
         }
         return mergedList;
