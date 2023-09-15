@@ -402,65 +402,8 @@ public class MultipleInputStreamJoinTest extends TestLogger {
         Configuration configuration = tEnv.getConfig().getConfiguration();
         configuration.setString("pipeline.name", "tpch");
         createTables(tEnv);
-        String query =
-                "select\n"
-                        + "        s_acctbal,\n"
-                        + "        s_name,\n"
-                        + "        n_name,\n"
-                        + "        p_partkey,\n"
-                        + "        p_mfgr,\n"
-                        + "        s_address,\n"
-                        + "        s_phone,\n"
-                        + "        s_comment\n"
-                        + "from\n"
-                        + "        part,\n"
-                        + "        supplier,\n"
-                        + "        partsupp,\n"
-                        + "        nation,\n"
-                        + "        region\n"
-                        + "where\n"
-                        + "        p_partkey = ps_partkey\n"
-                        + "        and s_suppkey = ps_suppkey\n"
-                        + "        and p_size = 48\n"
-                        + "        and p_type like '%STEEL'\n"
-                        + "        and s_nationkey = n_nationkey\n"
-                        + "        and n_regionkey = r_regionkey\n"
-                        + "        and r_name = 'EUROPE'\n"
-                        + "        and ps_supplycost = (\n"
-                        + "                select\n"
-                        + "                        min(ps_supplycost)\n"
-                        + "                from\n"
-                        + "                        partsupp,\n"
-                        + "                        supplier,\n"
-                        + "                        nation,\n"
-                        + "                        region\n"
-                        + "                where\n"
-                        + "                        p_partkey = ps_partkey\n"
-                        + "                        and s_suppkey = ps_suppkey\n"
-                        + "                        and s_nationkey = n_nationkey\n"
-                        + "                        and n_regionkey = r_regionkey\n"
-                        + "                        and r_name = 'EUROPE'\n"
-                        + "        );";
-        System.out.println(tEnv.explainSql(query));
-        tEnv.executeSql(query).print();
-    }
-
-    @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
-    @ValueSource(booleans = {true})
-    public void testTpchQ7(boolean multipleJoinEnable) {
-        tEnv.getConfig()
-                .getConfiguration()
-                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED, true);
-        // 获取注册的配置
-        ExecutionConfig.GlobalJobParameters parameters = env.getConfig().getGlobalJobParameters();
-        Map<String, String> map = parameters.toMap();
-        String data = map.getOrDefault("data", "1g");
-        tEnv.getConfig().setIdleStateRetention(Duration.ofHours(24));
-        Configuration configuration = tEnv.getConfig().getConfiguration();
-        configuration.setString("pipeline.name", "tpch");
-        createTables(tEnv);
         String Q7 =
-                        "                select\n"
+                "                select\n"
                         + "                        n1.n_name as supp_nation,\n"
                         + "                        n2.n_name as cust_nation\n"
                         + "                from\n"
@@ -476,8 +419,48 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "                        and c_custkey = o_custkey\n"
                         + "                        and s_nationkey = n1.n_nationkey\n"
                         + "                        and c_nationkey = n2.n_nationkey\n";
-    System.out.println(tEnv.explainSql(Q7));
-    tEnv.executeSql(Q7).print();
+        System.out.println(tEnv.explainSql(Q7));
+        tEnv.executeSql(Q7).print();
+    }
+
+    @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")
+    @ValueSource(booleans = {true})
+    public void testTpchQ5(boolean multipleJoinEnable) {
+        tEnv.getConfig()
+                .getConfiguration()
+                .set(OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED, true);
+        // 获取注册的配置
+        ExecutionConfig.GlobalJobParameters parameters = env.getConfig().getGlobalJobParameters();
+        Map<String, String> map = parameters.toMap();
+        String data = map.getOrDefault("data", "1g");
+        tEnv.getConfig().setIdleStateRetention(Duration.ofHours(24));
+        Configuration configuration = tEnv.getConfig().getConfiguration();
+        configuration.setString("pipeline.name", "tpch");
+        createTables(tEnv);
+        String Q5 =
+                "select\n"
+                        + "        c_custkey, \n"
+                        + "        l_orderkey, \n"
+                        + "        l_suppkey, \n"
+                        + "        c_nationkey, \n"
+                        + "        n_regionkey \n"
+                        + "from\n"
+                        + "        customer,\n"
+                        + "        orders,\n"
+                        + "        lineitem,\n"
+                        + "        supplier,\n"
+                        + "        nation,\n"
+                        + "        region\n"
+                        + "where\n"
+                        + "        c_custkey = o_custkey\n"
+                        + "        and l_orderkey = o_orderkey\n"
+                        + "        and l_suppkey = s_suppkey\n"
+                        + "        and c_nationkey = s_nationkey\n"
+                        + "        and s_nationkey = n_nationkey\n"
+                        + "        and n_regionkey = r_regionkey\n"
+                ;
+    System.out.println(tEnv.explainSql(Q5));
+    tEnv.executeSql(Q5).print();
     }
 
     @ParameterizedTest(name = "Is MultipleInputJoin open: {0}")

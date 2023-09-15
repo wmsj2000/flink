@@ -340,7 +340,7 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
                             indexsStates.get(i).get();
                     HashMap<RowData, List<RowData>> indexMap = indexMapIter.iterator().next();
                     // HashMap<RowData, List<RowData>> indexMap = indexs.get(i);
-                    if (indexMap.containsKey(indexKey)) {
+                    if (indexMap.containsKey(indexKey) && !indexMap.get(indexKey).contains(stateKey)) {
                         indexMap.get(indexKey).add(stateKey);
                     } else {
                         List<RowData> list = new ArrayList<>();
@@ -589,7 +589,7 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
                     Iterable<HashMap<RowData, List<RowData>>> indexMapIter =
                             indexsStates.get(i).get();
                     HashMap<RowData, List<RowData>> indexMap = indexMapIter.iterator().next();
-                    if (indexMap.containsKey(indexKey)) {
+                    if (indexMap.containsKey(indexKey) && !indexMap.get(indexKey).contains(stateKey)) {
                         indexMap.get(indexKey).add(stateKey);
                     } else {
                         List<RowData> list = new ArrayList<>();

@@ -284,7 +284,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
                 if(data1==data2){
                     mergedList.set(i,data1);
                 }else {
-                    mergedList=null;
+                    return null;
                 }
             }
         }
