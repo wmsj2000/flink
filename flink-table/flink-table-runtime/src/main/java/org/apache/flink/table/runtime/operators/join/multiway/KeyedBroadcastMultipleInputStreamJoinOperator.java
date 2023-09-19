@@ -148,10 +148,10 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         boolean[] visited = new boolean[numberOfInputs];
         HashSet<MultipleInputJoinEdge> path = new HashSet<>();
         visited[inputIndex] = true;
-        /*List<List<RowData>> associatedLists =
-                dfsJoin(multipleInputJoinEdges, inputList, inputIndex, visited,path);*/
         List<List<RowData>> associatedLists =
-                dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);
+                dfsJoin(multipleInputJoinEdges, inputList, inputIndex, visited,path);
+/*        List<List<RowData>> associatedLists =
+                dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);*/
         for (List<RowData> associated : associatedLists) {
             List<RowData> projectedAssociated = projectAssociated(associated, inputSideSpecs);
             MultipleInputJoinedRowData multipleInputJoinedRowData =
