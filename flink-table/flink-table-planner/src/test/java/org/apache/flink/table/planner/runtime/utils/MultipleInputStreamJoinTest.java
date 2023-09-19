@@ -457,7 +457,7 @@ public class MultipleInputStreamJoinTest extends TestLogger {
                         + "        and l_suppkey = s_suppkey\n"
                         + "        and c_nationkey = s_nationkey\n"
                         + "        and s_nationkey = n_nationkey\n"
-                        + "        and n_regionkey = r_regionkey\n"
+                        + "        and n_regionkey = r_regionkey\n ;"
                 ;
     System.out.println(tEnv.explainSql(Q5));
     tEnv.executeSql(Q5).print();

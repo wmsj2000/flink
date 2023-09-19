@@ -61,7 +61,9 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
     protected transient TimestampedCollector<RowData> collector;
     private final MultipleInputJoinEdge[][] multipleInputJoinEdges;
     private transient JoinConditionWithNullFilters[][] joinConditions;
-    private transient List<List<MultipleInputJoinEdge>> joinPaths;
+    private transient HashSet<MultipleInputJoinEdge> endPath;
+    private transient boolean[] endVisited;
+
 
     final Logger logger = LoggerFactory.getLogger(MultipleInputStreamJoinOperator.class);
 
@@ -85,7 +87,23 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         super.open();
         this.recordStateViews = initStates();
         this.joinConditions = getConditions();
+        initEndPath();
         this.collector = new TimestampedCollector<>(output);
+    }
+
+    private void initEndPath() {
+        boolean[] endVisited = new boolean[numberOfInputs];
+        Arrays.fill(endVisited,true);
+        HashSet<MultipleInputJoinEdge> endPath = new HashSet<>();
+        for (int i = 0; i < numberOfInputs; i++) {
+            for (int j = 0; j < numberOfInputs; j++) {
+                if (multipleInputJoinEdges[i][j]!= null) {
+                    endPath.add(multipleInputJoinEdges[i][j]);
+                }
+            }
+        }
+        this.endPath =  endPath;
+        this.endVisited = endVisited;
     }
 
     @Override
@@ -130,15 +148,21 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
         boolean[] visited = new boolean[numberOfInputs];
         HashSet<MultipleInputJoinEdge> path = new HashSet<>();
         visited[inputIndex] = true;
+        /*List<List<RowData>> associatedLists =
+                dfsJoin(multipleInputJoinEdges, inputList, inputIndex, visited,path);*/
         List<List<RowData>> associatedLists =
-                dfsJoin(multipleInputJoinEdges, inputList, inputIndex, visited,path);
+                dfsJoin2(multipleInputJoinEdges, inputList, inputIndex, visited);
         for (List<RowData> associated : associatedLists) {
-            if (!associated.contains(null)) {
+            List<RowData> projectedAssociated = projectAssociated(associated, inputSideSpecs);
+            MultipleInputJoinedRowData multipleInputJoinedRowData =
+                    new MultipleInputJoinedRowData(inputRowKind, projectedAssociated);
+            collector.collect(multipleInputJoinedRowData);
+/*            if (!associated.contains(null)) {
                 List<RowData> projectedAssociated = projectAssociated(associated, inputSideSpecs);
                 MultipleInputJoinedRowData multipleInputJoinedRowData =
                         new MultipleInputJoinedRowData(inputRowKind, projectedAssociated);
                 collector.collect(multipleInputJoinedRowData);
-            }
+            }*/
         }
     }
 
@@ -191,13 +215,7 @@ public class KeyedBroadcastMultipleInputStreamJoinOperator extends AbstractStrea
                         visited[i] = true;
                         dfs = dfsJoin(multipleInputJoinEdges, associatedRecords, i, visited,path);
                     }else {
-                        HashSet<MultipleInputJoinEdge> endPath = new HashSet<>();
-                        for (int j = 0; j < numberOfInputs; j++) {
-                            if(multipleInputJoinEdges[i][j]!=null){
-                                endPath.add(multipleInputJoinEdges[i][j]);
-                            }
-                        }
-                        dfs = dfsJoin(multipleInputJoinEdges, associatedRecords, i, visited,endPath);
+                        dfs = dfsJoin(multipleInputJoinEdges, associatedRecords, i, endVisited,endPath);
                     }
                     list = combineAssociatedLists(list, dfs);
                 }
