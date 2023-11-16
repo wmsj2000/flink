@@ -28,6 +28,7 @@ import org.apache.flink.table.planner.plan.nodes.exec.InputProperty;
 import org.apache.flink.table.planner.plan.nodes.exec.common.CommonExecExchange;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecJoin;
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecKeyedBroadcastMultipleInputJoin;
+import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecMultipleInputJoin;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.planner.plan.nodes.exec.visitor.AbstractExecNodeExactlyOnceVisitor;
 import org.apache.flink.util.Preconditions;
@@ -295,7 +296,7 @@ public class MultipleInputStreamJoinNodeCreationProcessor implements ExecNodeGra
         return (ExecNode<?>) createStreamMultipleInputJoinNode(tableConfig, group, inputs);
     }
 
-    private StreamExecKeyedBroadcastMultipleInputJoin<RowData> createStreamMultipleInputJoinNode(
+    private StreamExecMultipleInputJoin createStreamMultipleInputJoinNode(
             ReadableConfig tableConfig,
             MultipleInputJoinGroup group,
             List<Tuple3<ExecNode<?>, InputProperty, ExecEdge>> inputs) {
@@ -317,10 +318,10 @@ public class MultipleInputStreamJoinNodeCreationProcessor implements ExecNodeGra
         }
         String description =
                 ExecNodeUtil.getMultipleInputJoinDescription(rootNode, inputNodes, inputProperties);
-        StreamExecKeyedBroadcastMultipleInputJoin<RowData> multipleInputJoin;
+        StreamExecMultipleInputJoin multipleInputJoin;
         try {
             multipleInputJoin =
-                    new StreamExecKeyedBroadcastMultipleInputJoin<RowData>(
+                    new StreamExecMultipleInputJoin(
                             tableConfig, inputProperties, rootNode, originalEdges, description);
         } catch (Exception e) {
             throw new RuntimeException(e);

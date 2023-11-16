@@ -156,8 +156,8 @@ public class StreamExecKeyedBroadcastMultipleInputJoin<R> extends ExecNodeBase<R
                         selectors.get(0).getProducedType());
         // set 2 selectors for 2 keyed stream
         for (int i = 0; i < inputTransforms.size(); i++) {
-            RowDataKeySelector selector = i < 2 ? selectors.get(i) : null;
-            multipleInputJoinTransform.addInput(inputTransforms.get(i), selector);
+            //RowDataKeySelector selector = i < 2 ? selectors.get(i) : null;
+            multipleInputJoinTransform.addInput(inputTransforms.get(i), null);
         }
         multipleInputJoinTransform.setDescription(createTransformationDescription(config));
         // setMultipleInputJoinTransform(multipleInputJoinTransform, inputTransforms,

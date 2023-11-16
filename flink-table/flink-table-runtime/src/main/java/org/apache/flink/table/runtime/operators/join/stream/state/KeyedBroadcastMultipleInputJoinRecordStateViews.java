@@ -20,8 +20,6 @@ package org.apache.flink.table.runtime.operators.join.stream.state;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.BroadcastState;
-import org.apache.flink.api.common.state.ListState;
-import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.state.StateTtlConfig;
@@ -46,6 +44,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static org.apache.flink.table.runtime.util.StateConfigUtil.createTtlConfig;
@@ -137,7 +136,7 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
             StateTtlConfig ttlConfig)
             throws Exception {
         return new MultipleInputInputSideBroadcast(
-                ctx, stateName, inputSideSpec, operator, multipleInputJoinEdges, ttlConfig);
+                ctx, stateName, inputSideSpec, operator, multipleInputJoinEdges, ttlConfig,numberOfInputs);
     }
 
     // ------------------------------------------------------------------------------------
@@ -255,9 +254,7 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
         private final MapState<RowData, Integer> recordState;
         private final KeyedBroadcastMultipleInputStreamJoinOperator operator;
         private final int numberOfInputs;
-        private List<HashMap<RowData, List<RowData>>> indexs;
-        private List<ListState<HashMap<RowData, List<RowData>>>> indexsStates;
-
+        private List<MapState<RowData, Integer>> indexsStates;
         private MultipleInputInputSideHasNoUniqueKey(
                 RuntimeContext ctx,
                 String stateName,
@@ -278,43 +275,14 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
             this.recordState = ctx.getMapState(recordStateDesc);
             this.inputSideSpec = inputSideSpec;
             this.numberOfInputs = numberOfInputs;
-            indexs = new ArrayList<>(Collections.nCopies(numberOfInputs, new HashMap<>()));
-            initIndexState();
+            initIndexState(ctx);
         }
 
-        private void initIndexState() throws Exception {
-            int inputIndex = inputSideSpec.getInputIndex();
-            RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
-            InternalTypeInfo<RowData> stateKeyType = stateKeySelector.getProducedType();
-            List<InternalTypeInfo<RowData>> indexKeyTypes =
-                    new ArrayList<>(Collections.nCopies(numberOfInputs, null));
-            List<RowDataKeySelector> keySelectors = inputSideSpec.getKeySelectorList();
-            for (int i = 0; i < numberOfInputs; i++) {
-                RowDataKeySelector keySelector = keySelectors.get(i);
-                if (keySelector != null && keySelector != stateKeySelector) {
-                    indexKeyTypes.set(i, keySelector.getProducedType());
-                }
-            }
-            List<ListState<HashMap<RowData, List<RowData>>>> indexsStates =
-                    new ArrayList<>(Collections.nCopies(numberOfInputs, null));
-            for (int i = 0; i < numberOfInputs; i++) {
-                if (indexKeyTypes.get(i) == null) {
-                    continue;
-                }
-                ListStateDescriptor<HashMap<RowData, List<RowData>>> indexStateDesc =
-                        new ListStateDescriptor(
-                                "indexe" + i,
-                                Types.MAP(indexKeyTypes.get(i), Types.LIST(stateKeyType)));
-                ListState<HashMap<RowData, List<RowData>>> indexState =
-                        operator.getOperatorStateBackend().getListState(indexStateDesc);
-                indexState.add(new HashMap<>());
-                indexsStates.set(i, indexState);
-            }
-            this.indexsStates = indexsStates;
-        }
 
         @Override
         public void addRecord(RowData record) throws Exception {
+            RowData key = inputSideSpec.getStateKeySelector().getKey(record);
+            operator.setCurrentKey(key);
             Integer cnt = recordState.get(record);
             if (cnt != null) {
                 cnt += 1;
@@ -326,30 +294,6 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
             addToIndex(record);
         }
 
-        private void addToIndex(RowData record) throws Exception {
-            RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
-            RowData stateKey = stateKeySelector.getKey(record);
-            List<int[]> joinKeyList = inputSideSpec.getJoinKeyList();
-            List<RowDataKeySelector> selectors = inputSideSpec.getKeySelectorList();
-            for (int i = 0; i < joinKeyList.size(); i++) {
-                int[] joinKey = joinKeyList.get(i);
-                RowDataKeySelector selector = selectors.get(i);
-                if (joinKey != null && selector != null && selector != stateKeySelector) {
-                    RowData indexKey = selector.getKey(record);
-                    Iterable<HashMap<RowData, List<RowData>>> indexMapIter =
-                            indexsStates.get(i).get();
-                    HashMap<RowData, List<RowData>> indexMap = indexMapIter.iterator().next();
-                    // HashMap<RowData, List<RowData>> indexMap = indexs.get(i);
-                    if (indexMap.containsKey(indexKey) && !indexMap.get(indexKey).contains(stateKey)) {
-                        indexMap.get(indexKey).add(stateKey);
-                    } else {
-                        List<RowData> list = new ArrayList<>();
-                        list.add(stateKey);
-                        indexMap.put(indexKey, list);
-                    }
-                }
-            }
-        }
 
         @Override
         public void retractRecord(RowData record) throws Exception {
@@ -366,6 +310,56 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
             }
         }
 
+        private void initIndexState(RuntimeContext ctx) throws Exception {
+            RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
+            InternalTypeInfo<RowData> stateKeyType = stateKeySelector.getProducedType();
+            List<InternalTypeInfo<RowData>> indexKeyTypes =
+                    new ArrayList<>(Collections.nCopies(numberOfInputs, null));
+            List<RowDataKeySelector> keySelectors = inputSideSpec.getKeySelectorList();
+            for (int i = 0; i < numberOfInputs; i++) {
+                RowDataKeySelector keySelector = keySelectors.get(i);
+                if (keySelector != null && keySelector != stateKeySelector) {
+                    indexKeyTypes.set(i, keySelector.getProducedType());
+                }
+            }
+            List<MapState<RowData, Integer>> indexsStates =
+                    new ArrayList<>(Collections.nCopies(numberOfInputs, null));
+            for (int i = 0; i < numberOfInputs; i++) {
+                if (indexKeyTypes.get(i) == null) {
+                    continue;
+                }
+                MapStateDescriptor<RowData, Integer> indexStateDesc =
+                        new MapStateDescriptor<>("indexe" + i, indexKeyTypes.get(i),  Types.INT);
+                MapState<RowData, Integer> indexState =
+                        ctx.getMapState(indexStateDesc);
+                indexsStates.set(i, indexState);
+            }
+            this.indexsStates = indexsStates;
+        }
+
+        private void addToIndex(RowData record) throws Exception {
+            RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
+            RowData stateKey = stateKeySelector.getKey(record);
+            List<int[]> joinKeyList = inputSideSpec.getJoinKeyList();
+            List<RowDataKeySelector> selectors = inputSideSpec.getKeySelectorList();
+            for (int i = 0; i < joinKeyList.size(); i++) {
+                int[] joinKey = joinKeyList.get(i);
+                RowDataKeySelector selector = selectors.get(i);
+                if (joinKey != null && selector != null && selector != stateKeySelector) {
+                    RowData indexKey = selector.getKey(record);
+                    operator.setCurrentKey(indexKey);
+                    MapState<RowData, Integer> indexMapState= indexsStates.get(i);
+                    Integer cnt = indexMapState.get(record);
+                    if (cnt != null) {
+                        cnt += 1;
+                    } else {
+                        cnt = 1;
+                    }
+                    indexMapState.put(record, cnt);
+                }
+            }
+        }
+
         private void removeFromIndex(RowData record) throws Exception {
             RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
             RowData stateKey = stateKeySelector.getKey(record);
@@ -376,23 +370,15 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
                 RowDataKeySelector selector = selectors.get(i);
                 if (joinKey != null && selector != null && selector != stateKeySelector) {
                     RowData indexKey = selector.getKey(record);
-                    Iterable<HashMap<RowData, List<RowData>>> indexMapIter =
-                            indexsStates.get(i).get();
-                    HashMap<RowData, List<RowData>> indexMap = indexMapIter.iterator().next();
-                    if (!indexMap.containsKey(indexKey)) {
-                        continue;
-                    }
-                    boolean isRemove = false;
-                    List<RowData> rowDatas = indexMap.get(indexKey);
-                    for (int j = 0; j < rowDatas.size(); j++) {
-                        if (rowDatas.get(j).equals(stateKey)) {
-                            rowDatas.remove(j);
-                            isRemove = true;
-                            break;
+                    operator.setCurrentKey(indexKey);
+                    MapState<RowData, Integer> indexMapState= indexsStates.get(i);
+                    Integer cnt = indexMapState.get(record);
+                    if (cnt != null) {
+                        if (cnt > 1) {
+                            indexMapState.put(record, cnt - 1);
+                        } else {
+                            indexMapState.remove(record);
                         }
-                    }
-                    if (isRemove && rowDatas.isEmpty()) {
-                        indexMap.remove(indexKey);
                     }
                 }
             }
@@ -413,10 +399,9 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
             if (stateKey == joinKey) {
                 stateKeyDataList.add(recordKey);
             } else {
-                Iterable<HashMap<RowData, List<RowData>>> indexMapIter =
-                        indexsStates.get(index).get();
-                HashMap<RowData, List<RowData>> indexMap = indexMapIter.iterator().next();
-                stateKeyDataList = indexMap.getOrDefault(recordKey, null);
+                Iterable<RowData> stateKeys = indexsStates.get(index).keys();
+                stateKeyDataList = stateKeys==null?null:StreamSupport.stream(stateKeys.spliterator(), false)
+                        .collect(Collectors.toList());
             }
             if (stateKeyDataList == null || stateKeyDataList.isEmpty()) {
                 return Collections.emptyList();
@@ -483,8 +468,9 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
         private BroadcastState<RowData, Map<RowData, Integer>> broadcastState;
         private final MultipleInputJoinInputSideSpec inputSideSpec;
         private final KeyedBroadcastMultipleInputStreamJoinOperator operator;
-        private List<HashMap<RowData, List<RowData>>> indexs;
-        private List<ListState<HashMap<RowData, List<RowData>>>> indexsStates;
+        private List<MapState<RowData, Integer>> indexsStates;
+        private final int numberOfInputs;
+
 
         private MultipleInputInputSideBroadcast(
                 RuntimeContext ctx,
@@ -492,49 +478,15 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
                 MultipleInputJoinInputSideSpec inputSideSpec,
                 KeyedBroadcastMultipleInputStreamJoinOperator operator,
                 MultipleInputJoinEdge[][] multipleInputJoinEdges,
-                StateTtlConfig ttlConfig)
+                StateTtlConfig ttlConfig,
+                int numberOfInputs)
                 throws Exception {
             this.inputSideSpec = inputSideSpec;
             this.operator = operator;
-            indexs =
-                    new ArrayList<>(
-                            Collections.nCopies(multipleInputJoinEdges.length, new HashMap<>()));
             this.multipleInputJoinEdges = multipleInputJoinEdges;
-            // initIndexState();
+            this.numberOfInputs = numberOfInputs;
             initBroadcastState(stateName, inputSideSpec, ttlConfig);
-            initIndexState();
-        }
-
-        private void initIndexState() throws Exception {
-            int numberOfInputs = multipleInputJoinEdges.length;
-            int inputIndex = inputSideSpec.getInputIndex();
-            RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
-            InternalTypeInfo<RowData> stateKeyType = stateKeySelector.getProducedType();
-            List<InternalTypeInfo<RowData>> indexKeyTypes =
-                    new ArrayList<>(Collections.nCopies(numberOfInputs, null));
-            List<RowDataKeySelector> keySelectors = inputSideSpec.getKeySelectorList();
-            for (int i = 0; i < numberOfInputs; i++) {
-                RowDataKeySelector keySelector = keySelectors.get(i);
-                if (keySelector != null && keySelector != stateKeySelector) {
-                    indexKeyTypes.set(i, keySelector.getProducedType());
-                }
-            }
-            List<ListState<HashMap<RowData, List<RowData>>>> indexsStates =
-                    new ArrayList<>(Collections.nCopies(numberOfInputs, null));
-            for (int i = 0; i < numberOfInputs; i++) {
-                if (indexKeyTypes.get(i) == null) {
-                    continue;
-                }
-                ListStateDescriptor<HashMap<RowData, List<RowData>>> indexStateDesc =
-                        new ListStateDescriptor(
-                                "indexe" + i,
-                                Types.MAP(indexKeyTypes.get(i), Types.LIST(stateKeyType)));
-                ListState<HashMap<RowData, List<RowData>>> indexState =
-                        operator.getOperatorStateBackend().getListState(indexStateDesc);
-                indexState.add(new HashMap<>());
-                indexsStates.set(i, indexState);
-            }
-            this.indexsStates = indexsStates;
+            initIndexState(ctx);
         }
 
         private void initBroadcastState(
@@ -576,6 +528,33 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
             addToIndex(record);
         }
 
+        private void initIndexState(RuntimeContext ctx) throws Exception {
+            RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
+            InternalTypeInfo<RowData> stateKeyType = stateKeySelector.getProducedType();
+            List<InternalTypeInfo<RowData>> indexKeyTypes =
+                    new ArrayList<>(Collections.nCopies(numberOfInputs, null));
+            List<RowDataKeySelector> keySelectors = inputSideSpec.getKeySelectorList();
+            for (int i = 0; i < numberOfInputs; i++) {
+                RowDataKeySelector keySelector = keySelectors.get(i);
+                if (keySelector != null && keySelector != stateKeySelector) {
+                    indexKeyTypes.set(i, keySelector.getProducedType());
+                }
+            }
+            List<MapState<RowData, Integer>> indexsStates =
+                    new ArrayList<>(Collections.nCopies(numberOfInputs, null));
+            for (int i = 0; i < numberOfInputs; i++) {
+                if (indexKeyTypes.get(i) == null) {
+                    continue;
+                }
+                MapStateDescriptor<RowData, Integer> indexStateDesc =
+                        new MapStateDescriptor<>("indexe" + i, indexKeyTypes.get(i),  Types.INT);
+                MapState<RowData, Integer> indexState =
+                        ctx.getMapState(indexStateDesc);
+                indexsStates.set(i, indexState);
+            }
+            this.indexsStates = indexsStates;
+        }
+
         private void addToIndex(RowData record) throws Exception {
             RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
             RowData stateKey = stateKeySelector.getKey(record);
@@ -586,20 +565,42 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
                 RowDataKeySelector selector = selectors.get(i);
                 if (joinKey != null && selector != null && selector != stateKeySelector) {
                     RowData indexKey = selector.getKey(record);
-                    Iterable<HashMap<RowData, List<RowData>>> indexMapIter =
-                            indexsStates.get(i).get();
-                    HashMap<RowData, List<RowData>> indexMap = indexMapIter.iterator().next();
-                    if (indexMap.containsKey(indexKey) && !indexMap.get(indexKey).contains(stateKey)) {
-                        indexMap.get(indexKey).add(stateKey);
+                    operator.setCurrentKey(indexKey);
+                    MapState<RowData, Integer> indexMapState= indexsStates.get(i);
+                    Integer cnt = indexMapState.get(record);
+                    if (cnt != null) {
+                        cnt += 1;
                     } else {
-                        List<RowData> list = new ArrayList<>();
-                        list.add(stateKey);
-                        indexMap.put(indexKey, list);
+                        cnt = 1;
                     }
+                    indexMapState.put(record, cnt);
                 }
             }
         }
 
+        private void removeFromIndex(RowData record) throws Exception {
+            RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
+            RowData stateKey = stateKeySelector.getKey(record);
+            List<int[]> joinKeyList = inputSideSpec.getJoinKeyList();
+            List<RowDataKeySelector> selectors = inputSideSpec.getKeySelectorList();
+            for (int i = 0; i < joinKeyList.size(); i++) {
+                int[] joinKey = joinKeyList.get(i);
+                RowDataKeySelector selector = selectors.get(i);
+                if (joinKey != null && selector != null && selector != stateKeySelector) {
+                    RowData indexKey = selector.getKey(record);
+                    operator.setCurrentKey(indexKey);
+                    MapState<RowData, Integer> indexMapState= indexsStates.get(i);
+                    Integer cnt = indexMapState.get(record);
+                    if (cnt != null) {
+                        if (cnt > 1) {
+                            indexMapState.put(record, cnt - 1);
+                        } else {
+                            indexMapState.remove(record);
+                        }
+                    }
+                }
+            }
+        }
         @Override
         public void retractRecord(RowData record) throws Exception {
             RowData key = inputSideSpec.getStateKeySelector().getKey(record);
@@ -615,38 +616,6 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
                 }
                 recordSize--;
                 removeFromIndex(record);
-            }
-        }
-
-        private void removeFromIndex(RowData record) throws Exception {
-            RowDataKeySelector stateKeySelector = inputSideSpec.getStateKeySelector();
-            RowData stateKey = stateKeySelector.getKey(record);
-            List<int[]> joinKeyList = inputSideSpec.getJoinKeyList();
-            List<RowDataKeySelector> selectors = inputSideSpec.getKeySelectorList();
-            for (int i = 0; i < joinKeyList.size(); i++) {
-                int[] joinKey = joinKeyList.get(i);
-                RowDataKeySelector selector = selectors.get(i);
-                if (joinKey != null && selector != null && selector != stateKeySelector) {
-                    RowData indexKey = selector.getKey(record);
-                    Iterable<HashMap<RowData, List<RowData>>> indexMapIter =
-                            indexsStates.get(i).get();
-                    HashMap<RowData, List<RowData>> indexMap = indexMapIter.iterator().next();
-                    if (!indexMap.containsKey(indexKey)) {
-                        continue;
-                    }
-                    boolean isRemove = false;
-                    List<RowData> rowDatas = indexMap.get(indexKey);
-                    for (int j = 0; j < rowDatas.size(); j++) {
-                        if (rowDatas.get(j).equals(stateKey)) {
-                            rowDatas.remove(j);
-                            isRemove = true;
-                            break;
-                        }
-                    }
-                    if (isRemove && rowDatas.isEmpty()) {
-                        indexMap.remove(indexKey);
-                    }
-                }
             }
         }
 
@@ -670,11 +639,9 @@ public final class KeyedBroadcastMultipleInputJoinRecordStateViews {
             if (stateKey == joinKey) {
                 stateKeyDataList.add(recordKey);
             } else {
-                Iterable<HashMap<RowData, List<RowData>>> indexMapIter =
-                        indexsStates.get(index).get();
-                HashMap<RowData, List<RowData>> indexMap = indexMapIter.iterator().next();
-                // HashMap<RowData, List<RowData>> indexMap = indexs.get(index);
-                stateKeyDataList = indexMap.getOrDefault(recordKey, null);
+                Iterable<RowData> stateKeys = indexsStates.get(index).keys();
+                stateKeyDataList = stateKeys==null?null:StreamSupport.stream(stateKeys.spliterator(), false)
+                        .collect(Collectors.toList());
             }
             if (stateKeyDataList == null) {
                 return Collections.emptySet();

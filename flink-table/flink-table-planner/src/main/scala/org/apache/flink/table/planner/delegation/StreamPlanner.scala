@@ -85,8 +85,8 @@ class StreamPlanner(
 
     // multiple input join creation, OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED default true.
     if (getTableConfig.get(OptimizerConfigOptions.TABLE_OPTIMIZER_MULTIPLE_INPUT_JOIN_ENABLED)) {
-      processors.add(new KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor())
-      // processors.add(new MultipleInputStreamJoinNodeCreationProcessor())
+      //processors.add(new KeyedBroadcastMultipleInputStreamJoinNodeCreationProcessor())
+      processors.add(new MultipleInputStreamJoinNodeCreationProcessor())
     }
     processors
   }
